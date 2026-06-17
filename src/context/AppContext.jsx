@@ -250,8 +250,22 @@ export const AppProvider = ({ children }) => {
           const targetPurchase = p.purchases.find((pur) => pur.id === purchaseId);
           const osName = targetPurchase ? targetPurchase.osNumber : 'OS';
 
+          // Se o novo status não for pendente de pagamento, verifica se ainda resta alguma OS com débito
+          const hasUnpaid = updatedPurchases.some((pur) => pur.status === 'Aguardando Pagamento');
+          let updatedAlerts = p.alerts || [];
+          if (!hasUnpaid && status !== 'Aguardando Pagamento') {
+            updatedAlerts = updatedAlerts.filter(
+              (a) =>
+                !(
+                  a.type === 'administrative' &&
+                  (a.text.toLowerCase().includes('inadimplente') || a.text.toLowerCase().includes('pagamento'))
+                )
+            );
+          }
+
           return {
             ...p,
+            alerts: updatedAlerts,
             purchases: updatedPurchases,
             timeline: [
               {

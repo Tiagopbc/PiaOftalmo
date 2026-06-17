@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import PatientManager from './components/PatientManager';
 import AgendaManager from './components/AgendaManager';
 import OpticalOrders from './components/OpticalOrders';
+import FinanceManager from './components/FinanceManager';
 import {
   LayoutDashboard,
   Users,
@@ -11,7 +12,8 @@ import {
   Glasses,
   Smartphone,
   X,
-  Menu
+  Menu,
+  DollarSign
 } from 'lucide-react';
 
 function App() {
@@ -67,6 +69,8 @@ function App() {
         return <AgendaManager />;
       case 'optical':
         return <OpticalOrders />;
+      case 'finance':
+        return <FinanceManager />;
       default:
         return <Dashboard />;
     }
@@ -130,6 +134,13 @@ function App() {
           >
             <Glasses size={20} />
             Óptica & OS
+          </button>
+          <button
+            className={`nav-item ${activeTab === 'finance' ? 'active' : ''}`}
+            onClick={() => setActiveTab('finance')}
+          >
+            <DollarSign size={20} />
+            Financeiro
           </button>
         </nav>
 
@@ -203,6 +214,13 @@ function App() {
         >
           <Glasses size={20} />
           Óptica & OS
+        </button>
+        <button
+          className={`bottom-nav-item ${activeTab === 'finance' ? 'active' : ''}`}
+          onClick={() => setActiveTab('finance')}
+        >
+          <DollarSign size={20} />
+          Financeiro
         </button>
       </nav>
     </div>
