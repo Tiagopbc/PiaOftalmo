@@ -1,0 +1,67 @@
+const CACHE_NAME = 'pia-oftalmo-v1';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/src/main.jsx',
+  '/src/App.jsx',
+  '/src/index.css',
+  '/src/context/AppContext.jsx',
+  '/src/utils/mockData.js',
+  '/manifest.json',
+  '/favicon.svg'
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS).catch(err => console.log('Erro ao pré-cachear assets:', err));
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (e) => {
+  e.respondWith(
+    caches.match(e.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(e.request).then((response) => {
+        // Não salvar requisições de API externas ou dinâmicas no cache estático
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+        
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          // Apenas cacheia recursos locais estáticos
+          if (e.request.url.startsWith(self.location.origin) && !e.request.url.includes('hot-update')) {
+            cache.put(e.request, responseToCache);
+          }
+        });
+        
+        return response;
+      }).catch(() => {
+        // Fallback offline para navegações principais
+        if (e.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+      });
+    })
+  );
+});

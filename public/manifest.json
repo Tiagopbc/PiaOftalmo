@@ -1,0 +1,16 @@
+{
+  "short_name": "PIA Oftalmo",
+  "name": "PIA Oftalmo - Gestão Clínica & Óptica",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait-primary"
+}
