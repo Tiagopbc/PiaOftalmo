@@ -74,15 +74,15 @@ export const AppProvider = ({ children }) => {
         try {
           // Buscar pacientes
           const { data: pats, error: errPats } = await supabase.from('patients').select('*');
-          if (!errPats && pats && pats.length > 0) setPatients(pats);
+          if (!errPats && pats) setPatients(pats);
 
           // Buscar consultas
           const { data: apps, error: errApps } = await supabase.from('appointments').select('*');
-          if (!errApps && apps && apps.length > 0) setAppointments(apps);
+          if (!errApps && apps) setAppointments(apps);
 
           // Buscar fila de espera
           const { data: waits, error: errWaits } = await supabase.from('waitlist').select('*');
-          if (!errWaits && waits && waits.length > 0) setWaitlist(waits);
+          if (!errWaits && waits) setWaitlist(waits);
         } catch (e) {
           console.warn('Erro ao conectar tabelas do Supabase, rodando localmente:', e);
         }

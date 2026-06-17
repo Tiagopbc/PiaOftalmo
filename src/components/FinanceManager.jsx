@@ -1,7 +1,6 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { seedDatabase } from '../utils/seedSupabase';
 import { DollarSign, Percent, AlertCircle, CheckSquare, Search, Eye, Users, Settings, UserPlus, Database } from 'lucide-react';
 import { calculateCommission } from '../utils/helpers';
 
@@ -29,7 +28,6 @@ const FinanceManager = () => {
   const [empRole, setEmpRole] = useState('recepcao');
   const [empShop, setEmpShop] = useState('loja-1');
   const [loadingRegister, setLoadingRegister] = useState(false);
-  const [loadingSeeder, setLoadingSeeder] = useState(false);
 
   // Preço padrão para consultas particulares (para fins de simulação financeira)
   const PRIVATE_CONSULTATION_PRICE = 350.00;
@@ -152,20 +150,7 @@ const FinanceManager = () => {
     }
   };
 
-  // Handler para semear banco de dados
-  const handleSeedDatabase = async () => {
-    if (!confirm('Atenção: Isso irá APAGAR os registros das tabelas "patients", "appointments" e "waitlist" no Supabase e recarregará os dados padrão fictícios. Deseja prosseguir?')) {
-      return;
-    }
 
-    setLoadingSeeder(true);
-    const success = await seedDatabase();
-    setLoadingSeeder(false);
-
-    if (success) {
-      alert('Banco de dados semeado com sucesso! Recarregue a página para ver os dados sincronizados.');
-    }
-  };
 
   return (
     <div>
@@ -474,7 +459,7 @@ const FinanceManager = () => {
                         <span>Repasses de Convênio (Unimed)</span>
                         <strong>R$ {totalClinicalInsuranceSales.toFixed(2)} ({totalClinicalSales > 0 ? ((totalClinicalInsuranceSales / totalClinicalSales) * 100).toFixed(0) : 0}%)</strong>
                       </div>
-                      <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${totalClinicalSales > 0 ? (totalClinicalInsuranceSales / totalClinicalSales) * 100 : 0}%`, height: '100%', backgroundColor: '#0284c7', borderRadius: '4px' }}></div>
                       </div>
                     </div>
@@ -489,7 +474,7 @@ const FinanceManager = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
               
               {/* Cadastro de Colaborador */}
-              <div>
+              <div style={{ maxWidth: '480px' }}>
                 <h4 style={{ fontSize: '16px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <UserPlus size={18} color="var(--primary)" /> Cadastrar Colaborador
                 </h4>
@@ -535,24 +520,6 @@ const FinanceManager = () => {
                     {loadingRegister ? 'Registrando...' : 'Criar Conta de Acesso'}
                   </button>
                 </form>
-              </div>
-
-              {/* Semear Banco de Dados */}
-              <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '32px' }}>
-                <h4 style={{ fontSize: '16px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Database size={18} color="#d97706" /> Sincronizar Carga Inicial (Seed)
-                </h4>
-                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' }}>
-                  Carrega de uma só vez os registros simulados (pacientes, consultas) para a nuvem de produção.
-                </p>
-
-                <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '12px 16px', borderRadius: 'var(--radius-md)', fontSize: '12px', color: '#b45309', marginBottom: '20px' }}>
-                  <strong>Cuidado:</strong> Executar a semeadura deleta todos os dados das tabelas configuradas no Supabase antes de recarregar a carga padrão.
-                </div>
-
-                <button onClick={handleSeedDatabase} className="btn btn-secondary" style={{ width: '100%', border: '1px solid #d97706', color: '#d97706', backgroundColor: '#fffbeb', padding: '10px' }} disabled={loadingSeeder}>
-                  {loadingSeeder ? 'Processando tabelas...' : 'Semear Banco de Dados Real'}
-                </button>
               </div>
 
             </div>
