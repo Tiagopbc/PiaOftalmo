@@ -38,7 +38,9 @@ const PatientManager = () => {
       type: 'rx',
       data: rx,
       patientName: selectedPatient.name,
-      patientCpf: selectedPatient.cpf
+      patientBirthDate: selectedPatient.birthDate,
+      patientGender: selectedPatient.gender,
+      patientPhone: selectedPatient.phone
     });
     // Dar um pequeno tempo para o DOM renderizar antes de chamar a janela de impressão
     setTimeout(() => {

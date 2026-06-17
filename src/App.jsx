@@ -243,12 +243,16 @@ function App() {
             <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>Atendimento Oftalmológico & Diagnóstico Visual</p>
           </div>
           
-          <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', border: '1px solid #000', padding: '16px', borderRadius: '4px', marginBottom: '28px', fontSize: '13px', lineHeight: '1.6' }}>
             <div>
-              <p style={{ margin: '0 0 4px', fontSize: '14px' }}><strong>Paciente:</strong> {activePrintData.patientName}</p>
+              <p style={{ margin: '0 0 6px' }}><strong>Paciente:</strong> {activePrintData.patientName}</p>
+              <p style={{ margin: '0 0 6px' }}><strong>Data de Nascimento:</strong> {activePrintData.patientBirthDate ? new Date(activePrintData.patientBirthDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</p>
+              <p style={{ margin: 0 }}><strong>Sexo:</strong> {activePrintData.patientGender || '-'}</p>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ margin: 0, fontSize: '13px' }}><strong>Data da Emissão:</strong> {new Date(activePrintData.data.date).toLocaleDateString('pt-BR')}</p>
+            <div>
+              <p style={{ margin: '0 0 6px' }}><strong>Médico(a) Prescritor(a):</strong> {activePrintData.data.doctor}</p>
+              <p style={{ margin: '0 0 6px' }}><strong>Data da Emissão:</strong> {activePrintData.data.date ? new Date(activePrintData.data.date + 'T00:00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}</p>
+              {activePrintData.patientPhone && <p style={{ margin: 0 }}><strong>Telefone de Contato:</strong> {activePrintData.patientPhone}</p>}
             </div>
           </div>
 
