@@ -1,6 +1,8 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import { DollarSign, Percent, AlertCircle, CheckSquare, Search, Eye, Users } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
+import { seedDatabase } from '../utils/seedSupabase';
+import { DollarSign, Percent, AlertCircle, CheckSquare, Search, Eye, Users, Settings, UserPlus, Database } from 'lucide-react';
 
 const FinanceManager = () => {
   const {
@@ -13,12 +15,20 @@ const FinanceManager = () => {
     professionals
   } = useContext(AppContext);
 
-  const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats
+  const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats, config
   const [selectedProfId, setSelectedProfId] = useState(professionals[0]?.id || '1');
   const [selectedShopFilter, setSelectedShopFilter] = useState(() => {
-    // Inicializar com a loja do usuário (se for admin geral, começa em 'all')
     return currentUser?.shopId || 'all';
   });
+
+  // Campos para cadastro de colaborador
+  const [empName, setEmpName] = useState('');
+  const [empEmail, setEmpEmail] = useState('');
+  const [empPassword, setEmpPassword] = useState('');
+  const [empRole, setEmpRole] = useState('recepcao');
+  const [empShop, setEmpShop] = useState('loja-1');
+  const [loadingRegister, setLoadingRegister] = useState(false);
+  const [loadingSeeder, setLoadingSeeder] = useState(false);
 
   // Preço padrão para consultas particulares (para fins de simulação financeira)
   const PRIVATE_CONSULTATION_PRICE = 350.00;
@@ -93,6 +103,66 @@ const FinanceManager = () => {
   const privateCommission = profPrivateApps.length * (PRIVATE_CONSULTATION_PRICE * 0.40);
   const insuranceCommission = profInsuranceApps.length * 40.00;
   const totalCommission = privateCommission + insuranceCommission;
+
+  // Handler para cadastrar funcionário
+  const handleRegisterEmployee = async (e) => {
+    e.preventDefault();
+    if (empPassword.length < 6) {
+      alert('A senha deve ter no mínimo 6 caracteres!');
+      return;
+    }
+
+    setLoadingRegister(true);
+
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase.auth.signUp({
+          email: empEmail,
+          password: empPassword,
+          options: {
+            data: {
+              name: empName,
+              role: empRole,
+              shop_id: empShop
+            }
+          }
+        });
+
+        if (error) throw error;
+
+        alert(`Colaborador "${empName}" cadastrado no Supabase com sucesso!`);
+        setEmpName('');
+        setEmpEmail('');
+        setEmpPassword('');
+      } catch (err) {
+        alert('Erro ao cadastrar colaborador no Supabase: ' + err.message);
+      } finally {
+        setLoadingRegister(false);
+      }
+    } else {
+      // Simulação para o modo Demo
+      alert(`[SIMULAÇÃO OFFLINE] Login de funcionário criado com sucesso!\nNome: ${empName}\nE-mail: ${empEmail}\nFunção: ${empRole}\nFilial: ${empShop}`);
+      setEmpName('');
+      setEmpEmail('');
+      setEmpPassword('');
+      setLoadingRegister(false);
+    }
+  };
+
+  // Handler para semear banco de dados
+  const handleSeedDatabase = async () => {
+    if (!confirm('Atenção: Isso irá APAGAR os registros das tabelas "patients", "appointments" e "waitlist" no Supabase e recarregará os dados padrão fictícios. Deseja prosseguir?')) {
+      return;
+    }
+
+    setLoadingSeeder(true);
+    const success = await seedDatabase();
+    setLoadingSeeder(false);
+
+    if (success) {
+      alert('Banco de dados semeado com sucesso! Recarregue a página para ver os dados sincronizados.');
+    }
+  };
 
   return (
     <div>
@@ -186,6 +256,13 @@ const FinanceManager = () => {
             >
               Distribuição de Faturamento
             </button>
+            <button
+              className={`tab-btn ${activeSubTab === 'config' ? 'active' : ''}`}
+              onClick={() => setActiveSubTab('config')}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <Settings size={14} /> Configurações
+            </button>
           </div>
 
           {/* Aba: Contas a Receber */}
@@ -276,7 +353,6 @@ const FinanceManager = () => {
                 </div>
               </div>
 
-              {/* Detalhes de repasse do profissional */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
                 <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', height: 'fit-content' }}>
                   <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -348,11 +424,9 @@ const FinanceManager = () => {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '32px' }}>
-                {/* Distribuição Ótica vs Médica */}
                 <div>
                   <h5 style={{ fontSize: '14px', marginBottom: '16px' }}>Origem do Faturamento</h5>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {/* Linha Ótica */}
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Ótica & Acessórios</span>
@@ -363,7 +437,6 @@ const FinanceManager = () => {
                       </div>
                     </div>
 
-                    {/* Linha Clínica */}
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Consultas & Procedimentos</span>
@@ -376,11 +449,9 @@ const FinanceManager = () => {
                   </div>
                 </div>
 
-                {/* Distribuição Clínica: Particular vs Convênio */}
                 <div>
                   <h5 style={{ fontSize: '14px', marginBottom: '16px' }}>Detalhamento Clínico (Convênios)</h5>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {/* Particular */}
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Consultas Particulares</span>
@@ -391,7 +462,6 @@ const FinanceManager = () => {
                       </div>
                     </div>
 
-                    {/* Convênio */}
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Repasses de Convênio (Unimed)</span>
@@ -404,6 +474,80 @@ const FinanceManager = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Aba: Configuração da Clínica [NOVO] */}
+          {activeSubTab === 'config' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+              
+              {/* Cadastro de Colaborador */}
+              <div>
+                <h4 style={{ fontSize: '16px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <UserPlus size={18} color="var(--primary)" /> Cadastrar Colaborador
+                </h4>
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' }}>
+                  Cria logins para funcionários diretamente com permissões e filiais embutidas.
+                </p>
+
+                <form onSubmit={handleRegisterEmployee}>
+                  <div className="form-group">
+                    <label>Nome Completo*</label>
+                    <input type="text" className="form-control" required value={empName} onChange={(e) => setEmpName(e.target.value)} disabled={loadingRegister} />
+                  </div>
+                  <div className="form-group">
+                    <label>E-mail*</label>
+                    <input type="email" className="form-control" required value={empEmail} onChange={(e) => setEmpEmail(e.target.value)} disabled={loadingRegister} />
+                  </div>
+                  <div className="form-group">
+                    <label>Senha Provisória*</label>
+                    <input type="password" placeholder="Mínimo 6 dígitos" className="form-control" required value={empPassword} onChange={(e) => setEmpPassword(e.target.value)} disabled={loadingRegister} />
+                  </div>
+                  
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Função (Acesso)</label>
+                      <select className="form-control" value={empRole} onChange={(e) => setEmpRole(e.target.value)} disabled={loadingRegister}>
+                        <option value="recepcao">Recepção</option>
+                        <option value="medico">Especialista (Médico)</option>
+                        <option value="vendedor">Vendedor (Óptica)</option>
+                        <option value="admin">Administrador Geral</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Filial Atribuída</label>
+                      <select className="form-control" value={empShop} onChange={(e) => setEmpShop(e.target.value)} disabled={loadingRegister}>
+                        <option value="loja-1">Filial 1 - Centro</option>
+                        <option value="loja-2">Filial 2 - Shopping</option>
+                        <option value="all">Todas as Filiais</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ width: '100%', marginTop: '8px', padding: '10px' }} disabled={loadingRegister}>
+                    {loadingRegister ? 'Registrando...' : 'Criar Conta de Acesso'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Semear Banco de Dados */}
+              <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '32px' }}>
+                <h4 style={{ fontSize: '16px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Database size={18} color="#d97706" /> Sincronizar Carga Inicial (Seed)
+                </h4>
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' }}>
+                  Carrega de uma só vez os registros simulados (pacientes, consultas) para a nuvem de produção.
+                </p>
+
+                <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '12px 16px', borderRadius: 'var(--radius-md)', fontSize: '12px', color: '#b45309', marginBottom: '20px' }}>
+                  <strong>Cuidado:</strong> Executar a semeadura deleta todos os dados das tabelas configuradas no Supabase antes de recarregar a carga padrão.
+                </div>
+
+                <button onClick={handleSeedDatabase} className="btn btn-secondary" style={{ width: '100%', border: '1px solid #d97706', color: '#d97706', backgroundColor: '#fffbeb', padding: '10px' }} disabled={loadingSeeder}>
+                  {loadingSeeder ? 'Processando tabelas...' : 'Semear Banco de Dados Real'}
+                </button>
+              </div>
+
             </div>
           )}
         </div>

@@ -30,6 +30,7 @@ export const AppProvider = ({ children }) => {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState(null);
+  const [activePrintData, setActivePrintData] = useState(null);
 
   // 1. Ouvir Sessão do Supabase (se configurado)
   useEffect(() => {
@@ -408,7 +409,9 @@ export const AppProvider = ({ children }) => {
         removeWaitlist,
         addPrescription,
         addPurchase,
-        updatePurchaseStatus
+        updatePurchaseStatus,
+        activePrintData,
+        setActivePrintData
       }}
     >
       {children}

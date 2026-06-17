@@ -27,8 +27,22 @@ const PatientManager = () => {
     addPrescription,
     addPurchase,
     updatePurchaseStatus,
-    professionals
+    professionals,
+    setActivePrintData
   } = useContext(AppContext);
+
+  const triggerPrintRx = (rx) => {
+    setActivePrintData({
+      type: 'rx',
+      data: rx,
+      patientName: selectedPatient.name,
+      patientCpf: selectedPatient.cpf
+    });
+    // Dar um pequeno tempo para o DOM renderizar antes de chamar a janela de impressão
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -738,9 +752,19 @@ const PatientManager = () => {
                     {selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0 ? (
                       selectedPatient.prescriptions.map((rx) => (
                         <div key={rx.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: '#fff' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', alignItems: 'center' }}>
                             <strong>Dr(a). {rx.doctor}</strong>
-                            <span style={{ color: 'var(--text-muted)' }}>{new Date(rx.date).toLocaleDateString('pt-BR')}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>{new Date(rx.date).toLocaleDateString('pt-BR')}</span>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '2px 8px', fontSize: '11px', height: 'auto' }}
+                                onClick={() => triggerPrintRx(rx)}
+                              >
+                                Imprimir
+                              </button>
+                            </div>
                           </div>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '8px', textAlign: 'center' }}>
                             <thead>

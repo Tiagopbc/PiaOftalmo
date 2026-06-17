@@ -771,3 +771,64 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 2px;
   }
 }
+
+/* ==========================================================================
+   CSS de Impressao (Receitas e OS)
+   ========================================================================== */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    font-family: 'Inter', sans-serif !important;
+  }
+
+  /* Ocultar elementos de UI interativos, menus e avisos */
+  .sidebar,
+  .bottom-nav,
+  .mobile-header,
+  .pwa-banner,
+  .btn,
+  .tab-container,
+  .form-group,
+  .no-print,
+  .badge-alert,
+  button,
+  select,
+  input,
+  textarea {
+    display: none !important;
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    background: none !important;
+  }
+
+  .card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Mostrar elementos específicos para impressao */
+  .print-only {
+    display: block !important;
+  }
+
+  .print-page {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #000000;
+  }
+}
+
+/* Ocultar por padrao no navegador para nao poluir a tela */
+.print-only {
+  display: none;
+}

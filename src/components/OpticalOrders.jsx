@@ -1,9 +1,23 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ShoppingBag, Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer } from 'lucide-react';
 
 const OpticalOrders = () => {
-  const { currentUser, patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId } = useContext(AppContext);
+  const { currentUser, patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId, setActivePrintData } = useContext(AppContext);
+
+  const triggerPrintOS = (order) => {
+    const patientObj = patients.find(p => p.id === order.patientId);
+    setActivePrintData({
+      type: 'os',
+      data: order,
+      patientName: order.patientName,
+      patientCpf: patientObj ? patientObj.cpf : ''
+    });
+    // Dar tempo para o DOM renderizar
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -229,6 +243,15 @@ const OpticalOrders = () => {
                             title="Ver Prontuário"
                           >
                             <Eye size={14} />
+                          </button>
+
+                          <button
+                            onClick={() => triggerPrintOS(order)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '6px' }}
+                            title="Imprimir Via do Cliente (OS)"
+                          >
+                            <Printer size={14} />
                           </button>
                         </div>
                       </td>

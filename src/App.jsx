@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 function App() {
-  const { currentUser, logout, activeTab, setActiveTab } = useContext(AppContext);
+  const { currentUser, logout, activeTab, setActiveTab, activePrintData } = useContext(AppContext);
   const [showPwaBanner, setShowPwaBanner] = useState(true);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
@@ -288,6 +288,125 @@ function App() {
           </button>
         ))}
       </nav>
+
+      {/* Elementos Exclusivos para Impressao (PDF) */}
+      {activePrintData && activePrintData.type === 'rx' && (
+        <div className="print-only print-page" style={{ padding: '40px', color: '#000', fontFamily: 'sans-serif' }}>
+          <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 4px', textTransform: 'uppercase' }}>PIA Oftalmo - Consultório Médico</h2>
+            <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>Atendimento Oftalmológico & Diagnóstico Visual</p>
+          </div>
+          
+          <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ margin: '0 0 4px', fontSize: '14px' }}><strong>Paciente:</strong> {activePrintData.patientName}</p>
+              <p style={{ margin: 0, fontSize: '13px', color: '#555' }}><strong>CPF:</strong> {activePrintData.patientCpf || 'Não informado'}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: 0, fontSize: '13px' }}><strong>Data da Emissão:</strong> {new Date(activePrintData.data.date).toLocaleDateString('pt-BR')}</p>
+            </div>
+          </div>
+
+          <h3 style={{ fontSize: '16px', borderBottom: '1px solid #000', paddingBottom: '6px', marginBottom: '16px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+            Receita de Óculos (Prescrição)
+          </h3>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', marginBottom: '24px', border: '1px solid #000', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f2f2f2', borderBottom: '1px solid #000' }}>
+                <th style={{ padding: '10px', borderRight: '1px solid #000' }}>Olho</th>
+                <th style={{ padding: '10px', borderRight: '1px solid #000' }}>Esférico</th>
+                <th style={{ padding: '10px', borderRight: '1px solid #000' }}>Cilíndrico</th>
+                <th style={{ padding: '10px', borderRight: '1px solid #000' }}>Eixo</th>
+                <th style={{ padding: '10px', borderRight: '1px solid #000' }}>Adição</th>
+                <th style={{ padding: '10px' }}>DNP</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid #000' }}>
+                <td style={{ padding: '12px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OD</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.od.esferico || 'Plano'}</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.od.cilindrico || '-'}</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.od.eixo || '-'}°</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.od.adicao || '-'}</td>
+                <td style={{ padding: '12px' }}>{activePrintData.data.od.dnp || '-'} mm</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '12px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OE</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.oe.esferico || 'Plano'}</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.oe.cilindrico || '-'}</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.oe.eixo || '-'}°</td>
+                <td style={{ padding: '12px', borderRight: '1px solid #000' }}>{activePrintData.data.oe.adicao || '-'}</td>
+                <td style={{ padding: '12px' }}>{activePrintData.data.oe.dnp || '-'} mm</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {activePrintData.data.lensType && (
+            <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+              <strong>Sugestão de Lentes:</strong> {activePrintData.data.lensType}
+            </p>
+          )}
+          {activePrintData.data.notes && (
+            <p style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '32px' }}>
+              <strong>Notas / Observações:</strong> "{activePrintData.data.notes}"
+            </p>
+          )}
+
+          <div style={{ marginTop: '120px', textAlign: 'center' }}>
+            <hr style={{ width: '250px', margin: '0 auto 8px', borderColor: '#000' }} />
+            <p style={{ fontSize: '14px', fontWeight: 'bold', margin: 0 }}>Dr(a). {activePrintData.data.doctor}</p>
+            <p style={{ fontSize: '11px', color: '#555', margin: 0 }}>Médico Oftalmologista</p>
+          </div>
+        </div>
+      )}
+
+      {activePrintData && activePrintData.type === 'os' && (
+        <div className="print-only print-page" style={{ padding: '40px', color: '#000', fontFamily: 'sans-serif' }}>
+          <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 4px', textTransform: 'uppercase' }}>PIA Oftalmo - Óptica & OS</h2>
+            <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>Comprovante de Compra e Ordem de Serviço</p>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', fontSize: '13px' }}>
+            <div>
+              <p style={{ margin: '0 0 4px' }}><strong>Nº OS:</strong> {activePrintData.data.osNumber}</p>
+              <p style={{ margin: '0 0 4px' }}><strong>Data do Pedido:</strong> {new Date(activePrintData.data.date).toLocaleDateString('pt-BR')}</p>
+              <p style={{ margin: 0 }}><strong>Loja:</strong> Filial {activePrintData.data.shop_id === 'loja-1' ? '1 - Centro' : '2 - Shopping'}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: '0 0 4px' }}><strong>Cliente:</strong> {activePrintData.patientName}</p>
+              <p style={{ margin: 0, color: '#555' }}><strong>Status da OS:</strong> {activePrintData.data.status}</p>
+            </div>
+          </div>
+
+          <h3 style={{ fontSize: '15px', borderBottom: '1px solid #000', paddingBottom: '6px', marginBottom: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+            Itens Solicitados
+          </h3>
+
+          <div style={{ border: '1px solid #000', padding: '16px', borderRadius: '4px', marginBottom: '24px', backgroundColor: '#fafafa' }}>
+            <p style={{ fontSize: '14px', margin: '0 0 8px' }}><strong>Produto/Lente:</strong> {activePrintData.data.item}</p>
+            <p style={{ fontSize: '16px', fontWeight: 'bold', margin: 0 }}>Valor Pago: R$ {parseFloat(activePrintData.data.value).toFixed(2)}</p>
+          </div>
+
+          <div style={{ fontSize: '11px', color: '#555', lineHeight: '1.5', marginBottom: '48px' }}>
+            <p style={{ margin: 0 }}>
+              <strong>Orientações de Retirada:</strong> O prazo médio para montagem e conferência no laboratório é de 5 a 7 dias úteis. Apresente esta via no momento da retirada para a conferência final do DNP e ajuste da armação.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '80px' }}>
+            <div style={{ textAlign: 'center', width: '220px' }}>
+              <hr style={{ borderColor: '#000', margin: '0 auto 8px' }} />
+              <p style={{ fontSize: '12px', margin: 0 }}>Assinatura do Consultor</p>
+            </div>
+            <div style={{ textAlign: 'center', width: '220px' }}>
+              <hr style={{ borderColor: '#000', margin: '0 auto 8px' }} />
+              <p style={{ fontSize: '12px', margin: 0 }}>Assinatura do Cliente</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
