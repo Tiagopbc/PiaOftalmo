@@ -296,7 +296,7 @@ export const AppProvider = ({ children }) => {
             date: newRx.date,
             type: 'prescription',
             title: 'Receita Oftalmológica Emitida',
-            desc: `OD Esf: ${rx.od.esferico} Cil: ${rx.od.cilindrico} | OE Esf: ${rx.oe.esferico} Cil: ${rx.oe.cilindrico}. Dr(a). ${rx.doctor}.`
+            desc: `OD Esf: ${(rx.longe?.od || rx.od)?.esferico || ''} Cil: ${(rx.longe?.od || rx.od)?.cilindrico || ''} | OE Esf: ${(rx.longe?.oe || rx.oe)?.esferico || ''} Cil: ${(rx.longe?.oe || rx.oe)?.cilindrico || ''}. Dr(a). ${rx.doctor}.`
           },
           ...patient.timeline
         ]

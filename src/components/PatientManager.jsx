@@ -95,8 +95,21 @@ const PatientManager = () => {
   const [showRxForm, setShowRxForm] = useState(false);
   const [newRx, setNewRx] = useState({
     doctor: professionals[0]?.name || '',
-    od: { esferico: '', cilindrico: '', eixo: '', adicao: '', dnp: '' },
-    oe: { esferico: '', cilindrico: '', eixo: '', adicao: '', dnp: '' },
+    longe: {
+      od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
+      oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
+    },
+    perto: {
+      od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
+      oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
+    },
+    adicao: '',
+    lensTypes: {
+      antireflexo: false,
+      multifocal: false,
+      fotossensivel: false,
+      bluecontrol: false
+    },
     lensType: '',
     notes: ''
   });
@@ -201,8 +214,21 @@ const PatientManager = () => {
     setShowRxForm(false);
     setNewRx({
       doctor: professionals[0]?.name || '',
-      od: { esferico: '', cilindrico: '', eixo: '', adicao: '', dnp: '' },
-      oe: { esferico: '', cilindrico: '', eixo: '', adicao: '', dnp: '' },
+      longe: {
+        od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
+        oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
+      },
+      perto: {
+        od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
+        oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
+      },
+      adicao: '',
+      lensTypes: {
+        antireflexo: false,
+        multifocal: false,
+        fotossensivel: false,
+        bluecontrol: false
+      },
       lensType: '',
       notes: ''
     });
@@ -708,64 +734,81 @@ const PatientManager = () => {
                         </select>
                       </div>
 
-                      {/* Olho Direito */}
-                      <h5 style={{ fontSize: '13px', margin: '12px 0 6px' }}>Olho Direito (OD)</h5>
-                      <div className="form-grid">
-                        <div className="form-group">
-                          <label>Esférico</label>
-                          <input type="text" placeholder="Ex: -2.25" className="form-control" value={newRx.od.esferico} onChange={(e) => setNewRx({ ...newRx, od: { ...newRx.od, esferico: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>Cilíndrico</label>
-                          <input type="text" placeholder="Ex: -0.50" className="form-control" value={newRx.od.cilindrico} onChange={(e) => setNewRx({ ...newRx, od: { ...newRx.od, cilindrico: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>Eixo (°)</label>
-                          <input type="text" placeholder="Ex: 90" className="form-control" value={newRx.od.eixo} onChange={(e) => setNewRx({ ...newRx, od: { ...newRx.od, eixo: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>Adição</label>
-                          <input type="text" placeholder="Ex: +1.50" className="form-control" value={newRx.od.adicao} onChange={(e) => setNewRx({ ...newRx, od: { ...newRx.od, adicao: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>DNP (mm)</label>
-                          <input type="text" placeholder="Ex: 31.5" className="form-control" value={newRx.od.dnp} onChange={(e) => setNewRx({ ...newRx, od: { ...newRx.od, dnp: e.target.value } })} />
-                        </div>
+                      {/* Grau Longe */}
+                      <h5 style={{ fontSize: '13px', margin: '14px 0 6px', color: 'var(--primary)', fontWeight: 'bold', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>Grau para Longe</h5>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0', overflowX: 'auto' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', width: '30px', flexShrink: 0 }}>OD</span>
+                        <input type="text" placeholder="Esférico" className="form-control" style={{ padding: '6px' }} value={newRx.longe.od.esferico} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, od: { ...newRx.longe.od, esferico: e.target.value } } })} />
+                        <input type="text" placeholder="Cilíndrico" className="form-control" style={{ padding: '6px' }} value={newRx.longe.od.cilindrico} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, od: { ...newRx.longe.od, cilindrico: e.target.value } } })} />
+                        <input type="text" placeholder="Eixo (°)" className="form-control" style={{ padding: '6px' }} value={newRx.longe.od.eixo} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, od: { ...newRx.longe.od, eixo: e.target.value } } })} />
+                        <input type="text" placeholder="DNP" className="form-control" style={{ padding: '6px' }} value={newRx.longe.od.dnp} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, od: { ...newRx.longe.od, dnp: e.target.value } } })} />
+                        <input type="text" placeholder="AV" className="form-control" style={{ padding: '6px' }} value={newRx.longe.od.av} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, od: { ...newRx.longe.od, av: e.target.value } } })} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0 16px', overflowX: 'auto' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', width: '30px', flexShrink: 0 }}>OE</span>
+                        <input type="text" placeholder="Esférico" className="form-control" style={{ padding: '6px' }} value={newRx.longe.oe.esferico} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, oe: { ...newRx.longe.oe, esferico: e.target.value } } })} />
+                        <input type="text" placeholder="Cilíndrico" className="form-control" style={{ padding: '6px' }} value={newRx.longe.oe.cilindrico} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, oe: { ...newRx.longe.oe, cilindrico: e.target.value } } })} />
+                        <input type="text" placeholder="Eixo (°)" className="form-control" style={{ padding: '6px' }} value={newRx.longe.oe.eixo} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, oe: { ...newRx.longe.oe, eixo: e.target.value } } })} />
+                        <input type="text" placeholder="DNP" className="form-control" style={{ padding: '6px' }} value={newRx.longe.oe.dnp} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, oe: { ...newRx.longe.oe, dnp: e.target.value } } })} />
+                        <input type="text" placeholder="AV" className="form-control" style={{ padding: '6px' }} value={newRx.longe.oe.av} onChange={(e) => setNewRx({ ...newRx, longe: { ...newRx.longe, oe: { ...newRx.longe.oe, av: e.target.value } } })} />
                       </div>
 
-                      {/* Olho Esquerdo */}
-                      <h5 style={{ fontSize: '13px', margin: '12px 0 6px' }}>Olho Esquerdo (OE)</h5>
-                      <div className="form-grid">
-                        <div className="form-group">
-                          <label>Esférico</label>
-                          <input type="text" placeholder="Ex: -2.00" className="form-control" value={newRx.oe.esferico} onChange={(e) => setNewRx({ ...newRx, oe: { ...newRx.oe, esferico: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>Cilíndrico</label>
-                          <input type="text" placeholder="Ex: -0.75" className="form-control" value={newRx.oe.cilindrico} onChange={(e) => setNewRx({ ...newRx, oe: { ...newRx.oe, cilindrico: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>Eixo (°)</label>
-                          <input type="text" placeholder="Ex: 85" className="form-control" value={newRx.oe.eixo} onChange={(e) => setNewRx({ ...newRx, oe: { ...newRx.oe, eixo: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>Adição</label>
-                          <input type="text" placeholder="Ex: +1.50" className="form-control" value={newRx.oe.adicao} onChange={(e) => setNewRx({ ...newRx, oe: { ...newRx.oe, adicao: e.target.value } })} />
-                        </div>
-                        <div className="form-group">
-                          <label>DNP (mm)</label>
-                          <input type="text" placeholder="Ex: 32.0" className="form-control" value={newRx.oe.dnp} onChange={(e) => setNewRx({ ...newRx, oe: { ...newRx.oe, dnp: e.target.value } })} />
+                      {/* Grau Perto */}
+                      <h5 style={{ fontSize: '13px', margin: '14px 0 6px', color: 'var(--primary)', fontWeight: 'bold', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>Grau para Perto</h5>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0', overflowX: 'auto' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', width: '30px', flexShrink: 0 }}>OD</span>
+                        <input type="text" placeholder="Esférico" className="form-control" style={{ padding: '6px' }} value={newRx.perto.od.esferico} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, od: { ...newRx.perto.od, esferico: e.target.value } } })} />
+                        <input type="text" placeholder="Cilíndrico" className="form-control" style={{ padding: '6px' }} value={newRx.perto.od.cilindrico} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, od: { ...newRx.perto.od, cilindrico: e.target.value } } })} />
+                        <input type="text" placeholder="Eixo (°)" className="form-control" style={{ padding: '6px' }} value={newRx.perto.od.eixo} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, od: { ...newRx.perto.od, eixo: e.target.value } } })} />
+                        <input type="text" placeholder="DNP" className="form-control" style={{ padding: '6px' }} value={newRx.perto.od.dnp} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, od: { ...newRx.perto.od, dnp: e.target.value } } })} />
+                        <input type="text" placeholder="AV" className="form-control" style={{ padding: '6px' }} value={newRx.perto.od.av} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, od: { ...newRx.perto.od, av: e.target.value } } })} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '8px 0 16px', overflowX: 'auto' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', width: '30px', flexShrink: 0 }}>OE</span>
+                        <input type="text" placeholder="Esférico" className="form-control" style={{ padding: '6px' }} value={newRx.perto.oe.esferico} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, oe: { ...newRx.perto.oe, esferico: e.target.value } } })} />
+                        <input type="text" placeholder="Cilíndrico" className="form-control" style={{ padding: '6px' }} value={newRx.perto.oe.cilindrico} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, oe: { ...newRx.perto.oe, cilindrico: e.target.value } } })} />
+                        <input type="text" placeholder="Eixo (°)" className="form-control" style={{ padding: '6px' }} value={newRx.perto.oe.eixo} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, oe: { ...newRx.perto.oe, eixo: e.target.value } } })} />
+                        <input type="text" placeholder="DNP" className="form-control" style={{ padding: '6px' }} value={newRx.perto.oe.dnp} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, oe: { ...newRx.perto.oe, dnp: e.target.value } } })} />
+                        <input type="text" placeholder="AV" className="form-control" style={{ padding: '6px' }} value={newRx.perto.oe.av} onChange={(e) => setNewRx({ ...newRx, perto: { ...newRx.perto, oe: { ...newRx.perto.oe, av: e.target.value } } })} />
+                      </div>
+
+                      {/* Adição */}
+                      <div className="form-group">
+                        <label>Adição</label>
+                        <input type="text" placeholder="Ex: +1.50" className="form-control" value={newRx.adicao} onChange={(e) => setNewRx({ ...newRx, adicao: e.target.value })} />
+                      </div>
+
+                      {/* Tipo de Lente Checkboxes */}
+                      <div className="form-group">
+                        <label>Opções de Filtros / Lente</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', padding: '6px', backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 'normal', cursor: 'pointer', margin: 0 }}>
+                            <input type="checkbox" checked={newRx.lensTypes.antireflexo} onChange={(e) => setNewRx({ ...newRx, lensTypes: { ...newRx.lensTypes, antireflexo: e.target.checked } })} />
+                            Antirreflexo
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 'normal', cursor: 'pointer', margin: 0 }}>
+                            <input type="checkbox" checked={newRx.lensTypes.multifocal} onChange={(e) => setNewRx({ ...newRx, lensTypes: { ...newRx.lensTypes, multifocal: e.target.checked } })} />
+                            Multifocal
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 'normal', cursor: 'pointer', margin: 0 }}>
+                            <input type="checkbox" checked={newRx.lensTypes.fotossensivel} onChange={(e) => setNewRx({ ...newRx, lensTypes: { ...newRx.lensTypes, fotossensivel: e.target.checked } })} />
+                            Fotossensível
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 'normal', cursor: 'pointer', margin: 0 }}>
+                            <input type="checkbox" checked={newRx.lensTypes.bluecontrol} onChange={(e) => setNewRx({ ...newRx, lensTypes: { ...newRx.lensTypes, bluecontrol: e.target.checked } })} />
+                            Bluecontrol
+                          </label>
                         </div>
                       </div>
 
                       <div className="form-group">
-                        <label>Tipo de Lente Recomendado</label>
-                        <input type="text" placeholder="Ex: Multifocal Antirreflexo" className="form-control" value={newRx.lensType} onChange={(e) => setNewRx({ ...newRx, lensType: e.target.value })} />
+                        <label>Sugestão de Lente / Outros</label>
+                        <input type="text" placeholder="Ex: Crizal Sapphire" className="form-control" value={newRx.lensType} onChange={(e) => setNewRx({ ...newRx, lensType: e.target.value })} />
                       </div>
 
                       <div className="form-group">
-                        <label>Notas adicionais de Receita</label>
-                        <input type="text" className="form-control" value={newRx.notes} onChange={(e) => setNewRx({ ...newRx, notes: e.target.value })} />
+                        <label>Notas / Observações</label>
+                        <input type="text" placeholder="Ex: Uso constante para leitura" className="form-control" value={newRx.notes} onChange={(e) => setNewRx({ ...newRx, notes: e.target.value })} />
                       </div>
 
                       <button type="submit" className="btn btn-primary btn-sm" style={{ width: '100%' }}>
@@ -792,38 +835,95 @@ const PatientManager = () => {
                               </button>
                             </div>
                           </div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '8px', textAlign: 'center' }}>
+                          
+                          {/* Longe Table */}
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>LONGE</div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
                             <thead>
-                              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                <th>Olho</th>
-                                <th>Esférico</th>
-                                <th>Cilíndrico</th>
-                                <th>Eixo</th>
-                                <th>Adição</th>
-                                <th>DNP</th>
+                              <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#f8fafc' }}>
+                                <th style={{ padding: '4px' }}>Olho</th>
+                                <th style={{ padding: '4px' }}>Esférico</th>
+                                <th style={{ padding: '4px' }}>Cilíndrico</th>
+                                <th style={{ padding: '4px' }}>Eixo</th>
+                                <th style={{ padding: '4px' }}>DNP</th>
+                                <th style={{ padding: '4px' }}>AV</th>
                               </tr>
                             </thead>
                             <tbody>
-                              <tr>
-                                <td><strong>OD</strong></td>
-                                <td>{rx.od.esferico || 'Plano'}</td>
-                                <td>{rx.od.cilindrico || '-'}</td>
-                                <td>{rx.od.eixo || '-'}°</td>
-                                <td>{rx.od.adicao || '-'}</td>
-                                <td>{rx.od.dnp || '-'} mm</td>
+                              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '4px' }}><strong>OD</strong></td>
+                                <td>{((rx.longe?.od || rx.od)?.esferico) || 'Plano'}</td>
+                                <td>{((rx.longe?.od || rx.od)?.cilindrico) || '-'}</td>
+                                <td>{((rx.longe?.od || rx.od)?.eixo) ? `${(rx.longe?.od || rx.od).eixo}°` : '-'}</td>
+                                <td>{((rx.longe?.od || rx.od)?.dnp) ? `${(rx.longe?.od || rx.od).dnp} mm` : '-'}</td>
+                                <td>{((rx.longe?.od || rx.od)?.av) || '-'}</td>
                               </tr>
                               <tr>
-                                <td><strong>OE</strong></td>
-                                <td>{rx.oe.esferico || 'Plano'}</td>
-                                <td>{rx.oe.cilindrico || '-'}</td>
-                                <td>{rx.oe.eixo || '-'}°</td>
-                                <td>{rx.oe.adicao || '-'}</td>
-                                <td>{rx.oe.dnp || '-'} mm</td>
+                                <td style={{ padding: '4px' }}><strong>OE</strong></td>
+                                <td>{((rx.longe?.oe || rx.oe)?.esferico) || 'Plano'}</td>
+                                <td>{((rx.longe?.oe || rx.oe)?.cilindrico) || '-'}</td>
+                                <td>{((rx.longe?.oe || rx.oe)?.eixo) ? `${(rx.longe?.oe || rx.oe).eixo}°` : '-'}</td>
+                                <td>{((rx.longe?.oe || rx.oe)?.dnp) ? `${(rx.longe?.oe || rx.oe).dnp} mm` : '-'}</td>
+                                <td>{((rx.longe?.oe || rx.oe)?.av) || '-'}</td>
                               </tr>
                             </tbody>
                           </table>
-                          {rx.lensType && <p style={{ fontSize: '12px' }}><strong>Lente Sugerida:</strong> {rx.lensType}</p>}
-                          {rx.notes && <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)' }}>"{rx.notes}"</p>}
+
+                          {/* Perto Table */}
+                          {rx.perto && (rx.perto.od?.esferico || rx.perto.oe?.esferico) && (
+                            <>
+                              <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>PERTO</div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#f8fafc' }}>
+                                    <th style={{ padding: '4px' }}>Olho</th>
+                                    <th style={{ padding: '4px' }}>Esférico</th>
+                                    <th style={{ padding: '4px' }}>Cilíndrico</th>
+                                    <th style={{ padding: '4px' }}>Eixo</th>
+                                    <th style={{ padding: '4px' }}>DNP</th>
+                                    <th style={{ padding: '4px' }}>AV</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                    <td style={{ padding: '4px' }}><strong>OD</strong></td>
+                                    <td>{rx.perto.od.esferico || 'Plano'}</td>
+                                    <td>{rx.perto.od.cilindrico || '-'}</td>
+                                    <td>{rx.perto.od.eixo ? `${rx.perto.od.eixo}°` : '-'}</td>
+                                    <td>{rx.perto.od.dnp ? `${rx.perto.od.dnp} mm` : '-'}</td>
+                                    <td>{rx.perto.od.av || '-'}</td>
+                                  </tr>
+                                  <tr>
+                                    <td style={{ padding: '4px' }}><strong>OE</strong></td>
+                                    <td>{rx.perto.oe.esferico || 'Plano'}</td>
+                                    <td>{rx.perto.oe.cilindrico || '-'}</td>
+                                    <td>{rx.perto.oe.eixo ? `${rx.perto.oe.eixo}°` : '-'}</td>
+                                    <td>{rx.perto.oe.dnp ? `${rx.perto.oe.dnp} mm` : '-'}</td>
+                                    <td>{rx.perto.oe.av || '-'}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </>
+                          )}
+
+                          {/* Adição e Tipo Lente */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px', margin: '8px 0', borderTop: '1px solid #eee', paddingTop: '8px' }}>
+                            {(rx.adicao || rx.od?.adicao || rx.oe?.adicao) && (
+                              <span><strong>Adição:</strong> {rx.adicao || rx.od?.adicao || rx.oe?.adicao}</span>
+                            )}
+                            {(() => {
+                              const types = [];
+                              if (rx.lensTypes?.antireflexo) types.push('Antirreflexo');
+                              if (rx.lensTypes?.multifocal) types.push('Multifocal');
+                              if (rx.lensTypes?.fotossensivel) types.push('Fotossensível');
+                              if (rx.lensTypes?.bluecontrol) types.push('Bluecontrol');
+                              return types.length > 0 ? (
+                                <span><strong>Filtros/Tipo:</strong> {types.join(', ')}</span>
+                              ) : null;
+                            })()}
+                          </div>
+                          {rx.lensType && <p style={{ fontSize: '12px', margin: '4px 0' }}><strong>Sugestão de Lente:</strong> {rx.lensType}</p>}
+                          {rx.notes && <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', margin: '4px 0' }}>"{rx.notes}"</p>}
                         </div>
                       ))
                     ) : (
