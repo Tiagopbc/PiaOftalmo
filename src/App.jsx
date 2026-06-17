@@ -5,6 +5,7 @@ import PatientManager from './components/PatientManager';
 import AgendaManager from './components/AgendaManager';
 import OpticalOrders from './components/OpticalOrders';
 import FinanceManager from './components/FinanceManager';
+import Login from './components/Login';
 import {
   LayoutDashboard,
   Users,
@@ -12,12 +13,13 @@ import {
   Glasses,
   Smartphone,
   X,
-  Menu,
-  DollarSign
+  DollarSign,
+  LogOut,
+  Store
 } from 'lucide-react';
 
 function App() {
-  const { activeTab, setActiveTab } = useContext(AppContext);
+  const { currentUser, logout, activeTab, setActiveTab } = useContext(AppContext);
   const [showPwaBanner, setShowPwaBanner] = useState(true);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
 
@@ -31,7 +33,6 @@ function App() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Verificar se já está rodando standalone (instalado)
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setShowPwaBanner(false);
     }
@@ -51,13 +52,54 @@ function App() {
       setDeferredPrompt(null);
       setShowPwaBanner(false);
     } else {
-      // Simulação para navegadores que não suportam ou desenvolvimento local
       alert(
-        'Instalação Simetrizada! No celular ou navegador, clique em "Adicionar à Tela de Início" nas opções do seu navegador para instalar o aplicativo como PWA offline.'
+        'Instalação Simulada! Para instalar em seu dispositivo móvel, use a opção "Adicionar à Tela de Início" nas configurações do seu navegador.'
       );
       setShowPwaBanner(false);
     }
   };
+
+  // Se não estiver logado, exibe tela de login
+  if (!currentUser) {
+    return <Login />;
+  }
+
+  // Filtragem de abas de acordo com a Role do usuário
+  const getNavItems = () => {
+    const role = currentUser.role;
+    const items = [
+      { id: 'dashboard', label: 'Painel Geral', icon: <LayoutDashboard size={20} /> }
+    ];
+
+    if (role === 'admin' || role === 'recepcao' || role === 'medico') {
+      items.push({ id: 'patients', label: 'Pacientes', icon: <Users size={20} /> });
+    } else if (role === 'vendedor') {
+      // Vendedores precisam acessar a lista de pacientes para ver receitas e OS
+      items.push({ id: 'patients', label: 'Receitas / Fichas', icon: <Users size={20} /> });
+    }
+
+    if (role === 'admin' || role === 'recepcao' || role === 'medico') {
+      items.push({ id: 'agenda', label: 'Agenda & Consultas', icon: <CalendarDays size={20} /> });
+    }
+
+    if (role === 'admin' || role === 'vendedor') {
+      items.push({ id: 'optical', label: 'Óptica & OS', icon: <Glasses size={20} /> });
+    }
+
+    if (role === 'admin') {
+      items.push({ id: 'finance', label: 'Financeiro', icon: <DollarSign size={20} /> });
+    }
+
+    return items;
+  };
+
+  const navItems = getNavItems();
+
+  // Validar se a aba atual está disponível para a role. Se não, redireciona para dashboard
+  const isTabAllowed = navItems.some(item => item.id === activeTab);
+  if (!isTabAllowed) {
+    setActiveTab('dashboard');
+  }
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -76,6 +118,22 @@ function App() {
     }
   };
 
+  const getShopName = (shopId) => {
+    if (shopId === 'loja-1') return 'Filial 1 - Centro';
+    if (shopId === 'loja-2') return 'Filial 2 - Shopping';
+    return 'Todas as Filiais';
+  };
+
+  const getRoleBadge = (role) => {
+    switch (role) {
+      case 'admin': return 'Administrador';
+      case 'medico': return 'Especialista';
+      case 'recepcao': return 'Recepção';
+      case 'vendedor': return 'Óptica / OS';
+      default: return role;
+    }
+  };
+
   return (
     <div className="app-container">
       {/* Mobile Top Header */}
@@ -86,12 +144,27 @@ function App() {
           </div>
           <div className="logo-text">
             <h1>PIA Oftalmo</h1>
-            <span>Gestão Clínica & Óptica</span>
+            <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
+              {getShopName(currentUser.shopId)}
+            </span>
           </div>
         </div>
-        <div className="user-avatar" style={{ width: '30px', height: '30px', fontSize: '12px' }}>
-          DR
-        </div>
+        <button
+          onClick={logout}
+          style={{
+            border: 'none',
+            background: 'none',
+            color: 'var(--status-cancelado-text)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '12px',
+            fontWeight: 'bold'
+          }}
+        >
+          <LogOut size={16} /> Sair
+        </button>
       </header>
 
       {/* Sidebar Navigation - Desktop */}
@@ -106,51 +179,68 @@ function App() {
           </div>
         </div>
 
+        {/* Loja Ativa Tag */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            fontSize: '12px',
+            marginBottom: '24px',
+            color: '#94a3b8',
+            border: '1px solid rgba(255,255,255,0.03)'
+          }}
+        >
+          <Store size={15} color="var(--primary)" />
+          <span>Loja: <strong>{getShopName(currentUser.shopId)}</strong></span>
+        </div>
+
         <nav className="nav-links">
-          <button
-            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <LayoutDashboard size={20} />
-            Painel Geral
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'patients' ? 'active' : ''}`}
-            onClick={() => setActiveTab('patients')}
-          >
-            <Users size={20} />
-            Pacientes
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'agenda' ? 'active' : ''}`}
-            onClick={() => setActiveTab('agenda')}
-          >
-            <CalendarDays size={20} />
-            Agenda & Consultas
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'optical' ? 'active' : ''}`}
-            onClick={() => setActiveTab('optical')}
-          >
-            <Glasses size={20} />
-            Óptica & OS
-          </button>
-          <button
-            className={`nav-item ${activeTab === 'finance' ? 'active' : ''}`}
-            onClick={() => setActiveTab('finance')}
-          >
-            <DollarSign size={20} />
-            Financeiro
-          </button>
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(item.id)}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-profile">
-            <div className="user-avatar">DR</div>
-            <div className="user-info">
-              <div className="user-name">Dr. Roberto</div>
-              <div className="user-role">Diretor Clínico</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="user-profile">
+              <div className="user-avatar" style={{ textTransform: 'uppercase' }}>
+                {currentUser.name[0]}
+              </div>
+              <div className="user-info">
+                <div className="user-name" style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentUser.name}
+                </div>
+                <div className="user-role">{getRoleBadge(currentUser.role)}</div>
+              </div>
             </div>
+
+            <button
+              onClick={logout}
+              style={{
+                border: 'none',
+                background: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                padding: '6px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+              title="Sair da Conta"
+            >
+              <LogOut size={18} />
+            </button>
           </div>
         </div>
       </aside>
@@ -187,41 +277,16 @@ function App() {
 
       {/* Bottom Navigation - Mobile Tab Bar */}
       <nav className="bottom-nav">
-        <button
-          className={`bottom-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          <LayoutDashboard size={20} />
-          Painel
-        </button>
-        <button
-          className={`bottom-nav-item ${activeTab === 'patients' ? 'active' : ''}`}
-          onClick={() => setActiveTab('patients')}
-        >
-          <Users size={20} />
-          Pacientes
-        </button>
-        <button
-          className={`bottom-nav-item ${activeTab === 'agenda' ? 'active' : ''}`}
-          onClick={() => setActiveTab('agenda')}
-        >
-          <CalendarDays size={20} />
-          Agenda
-        </button>
-        <button
-          className={`bottom-nav-item ${activeTab === 'optical' ? 'active' : ''}`}
-          onClick={() => setActiveTab('optical')}
-        >
-          <Glasses size={20} />
-          Óptica & OS
-        </button>
-        <button
-          className={`bottom-nav-item ${activeTab === 'finance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('finance')}
-        >
-          <DollarSign size={20} />
-          Financeiro
-        </button>
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            className={`bottom-nav-item ${activeTab === item.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(item.id)}
+          >
+            {item.icon}
+            {item.label.split(' ')[0]}
+          </button>
+        ))}
       </nav>
     </div>
   );

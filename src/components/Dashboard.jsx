@@ -4,6 +4,7 @@ import { Users, Calendar, ShoppingBag, ListPlus, AlertTriangle, CheckCircle, XCi
 
 const Dashboard = () => {
   const {
+    currentUser,
     patients,
     appointments,
     waitlist,
@@ -20,16 +21,29 @@ const Dashboard = () => {
     month: 'long'
   });
 
-  // Estatísticas
+  const userShopId = currentUser?.shopId;
+
+  // Filtrar dados por Loja/Filial (se aplicável)
+  const shopApps = appointments.filter(
+    (app) => !userShopId || userShopId === 'all' || app.shop_id === userShopId || !app.shop_id
+  );
+  const shopWaitlist = waitlist.filter(
+    (item) => !userShopId || userShopId === 'all' || item.shop_id === userShopId || !item.shop_id
+  );
+
+  // Estatísticas filtradas
   const totalPatients = patients.length;
-  const todayApps = appointments.filter((app) => app.date === todayStr);
+  const todayApps = shopApps.filter((app) => app.date === todayStr);
   const activeOS = patients.reduce((acc, p) => {
     const pending = p.purchases.filter(
-      (pur) => pur.status !== 'Entregue' && pur.status !== 'Cancelado'
+      (pur) =>
+        pur.status !== 'Entregue' &&
+        pur.status !== 'Cancelado' &&
+        (!userShopId || userShopId === 'all' || pur.shop_id === userShopId || !pur.shop_id)
     ).length;
     return acc + pending;
   }, 0);
-  const waitlistCount = waitlist.length;
+  const waitlistCount = shopWaitlist.length;
 
   // Filtrar alertas importantes dos pacientes cadastrados
   const allAlerts = patients.flatMap((p) =>

@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import {
   INITIAL_PATIENTS,
   INITIAL_APPOINTMENTS,
@@ -10,6 +11,8 @@ import {
 export const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+
   const [patients, setPatients] = useState(() => {
     const local = localStorage.getItem('pia_patients');
     return local ? JSON.parse(local) : INITIAL_PATIENTS;
@@ -28,7 +31,66 @@ export const AppProvider = ({ children }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState(null);
 
-  // Sincronização com o localStorage
+  // 1. Ouvir Sessão do Supabase (se configurado)
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          const user = session.user;
+          setCurrentUser({
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || user.email.split('@')[0],
+            role: user.user_metadata?.role || 'admin',
+            shopId: user.user_metadata?.shop_id || 'loja-1'
+          });
+        }
+      });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session) {
+          const user = session.user;
+          setCurrentUser({
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || user.email.split('@')[0],
+            role: user.user_metadata?.role || 'admin',
+            shopId: user.user_metadata?.shop_id || 'loja-1'
+          });
+        } else {
+          setCurrentUser(null);
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    }
+  }, []);
+
+  // 2. Carregar dados do Supabase ou persistir localmente
+  useEffect(() => {
+    const loadData = async () => {
+      if (isSupabaseConfigured && currentUser) {
+        try {
+          // Buscar pacientes
+          const { data: pats, error: errPats } = await supabase.from('patients').select('*');
+          if (!errPats && pats && pats.length > 0) setPatients(pats);
+
+          // Buscar consultas
+          const { data: apps, error: errApps } = await supabase.from('appointments').select('*');
+          if (!errApps && apps && apps.length > 0) setAppointments(apps);
+
+          // Buscar fila de espera
+          const { data: waits, error: errWaits } = await supabase.from('waitlist').select('*');
+          if (!errWaits && waits && waits.length > 0) setWaitlist(waits);
+        } catch (e) {
+          console.warn('Erro ao conectar tabelas do Supabase, rodando localmente:', e);
+        }
+      }
+    };
+    loadData();
+  }, [currentUser]);
+
+  // Persistir no LocalStorage caso esteja no modo demo
   useEffect(() => {
     localStorage.setItem('pia_patients', JSON.stringify(patients));
   }, [patients]);
@@ -42,7 +104,7 @@ export const AppProvider = ({ children }) => {
   }, [waitlist]);
 
   // Auxiliares de Pacientes
-  const addPatient = (patient) => {
+  const addPatient = async (patient) => {
     const newId = `pat-${Date.now()}`;
     const newPatient = {
       ...patient,
@@ -59,59 +121,85 @@ export const AppProvider = ({ children }) => {
       prescriptions: [],
       purchases: [],
       exams: [],
-      attachments: []
+      attachments: [],
+      shop_id: currentUser?.shopId || 'loja-1'
     };
+
     setPatients((prev) => [newPatient, ...prev]);
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('patients').insert(newPatient);
+      if (error) console.error('Erro ao salvar paciente no Supabase:', error);
+    }
+
     return newPatient;
   };
 
-  const updatePatient = (updatedPatient) => {
+  const updatePatient = async (updatedPatient) => {
     setPatients((prev) =>
       prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
     );
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('patients')
+        .update(updatedPatient)
+        .eq('id', updatedPatient.id);
+      if (error) console.error('Erro ao atualizar paciente no Supabase:', error);
+    }
   };
 
-  const deletePatient = (id) => {
+  const deletePatient = async (id) => {
     setPatients((prev) => prev.filter((p) => p.id !== id));
     setAppointments((prev) => prev.filter((app) => app.patientId !== id));
+
+    if (isSupabaseConfigured) {
+      await supabase.from('patients').delete().eq('id', id);
+      await supabase.from('appointments').delete().eq('patientId', id);
+    }
   };
 
   // Auxiliares de Agenda
-  const addAppointment = (app) => {
+  const addAppointment = async (app) => {
     const newId = `app-${Date.now()}`;
     const newApp = {
       ...app,
       id: newId,
-      status: 'confirmado'
+      status: 'confirmado',
+      shop_id: currentUser?.shopId || 'loja-1'
     };
+    
     setAppointments((prev) => [...prev, newApp]);
 
-    // Adiciona na timeline do paciente
-    setPatients((prevPatients) =>
-      prevPatients.map((p) => {
-        if (p.id === app.patientId) {
-          const serviceName = app.serviceName || 'Consulta / Exame';
-          return {
-            ...p,
-            timeline: [
-              {
-                id: `t-${Date.now()}`,
-                date: app.date,
-                type: 'appointment',
-                title: 'Agendamento Criado',
-                desc: `${serviceName} agendado para o dia ${app.date} às ${app.time}hs.`
-              },
-              ...p.timeline
-            ]
-          };
-        }
-        return p;
-      })
-    );
+    // Timeline do paciente
+    const patient = patients.find((p) => p.id === app.patientId);
+    if (patient) {
+      const serviceName = app.serviceName || 'Consulta / Exame';
+      const updatedPatient = {
+        ...patient,
+        timeline: [
+          {
+            id: `t-${Date.now()}`,
+            date: app.date,
+            type: 'appointment',
+            title: 'Agendamento Criado',
+            desc: `${serviceName} agendado para o dia ${app.date} às ${app.time}hs.`
+          },
+          ...patient.timeline
+        ]
+      };
+      updatePatient(updatedPatient);
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase.from('appointments').insert(newApp);
+      if (error) console.error('Erro ao salvar agendamento no Supabase:', error);
+    }
+
     return newApp;
   };
 
-  const updateAppointmentStatus = (id, status, cancelReason = '') => {
+  const updateAppointmentStatus = async (id, status, cancelReason = '') => {
     let appInfo = null;
     setAppointments((prev) =>
       prev.map((app) => {
@@ -123,55 +211,69 @@ export const AppProvider = ({ children }) => {
       })
     );
 
-    if (appInfo) {
-      setPatients((prevPatients) =>
-        prevPatients.map((p) => {
-          if (p.id === appInfo.patientId) {
-            let title = 'Agendamento Atualizado';
-            let desc = `Consulta de ${appInfo.time} foi marcada como ${status}.`;
-            if (status === 'cancelado') {
-              title = 'Agendamento Cancelado';
-              desc = `Cancelado por motivo: ${cancelReason || 'Não informado'}.`;
-            } else if (status === 'atendido') {
-              title = 'Atendimento Realizado';
-              desc = `Paciente atendido e finalizado pelo profissional.`;
-            } else if (status === 'falta') {
-              title = 'Falta Registrada';
-              desc = `Paciente não compareceu ao horário agendado.`;
-            }
+    if (isSupabaseConfigured) {
+      await supabase
+        .from('appointments')
+        .update({ status, cancelReason })
+        .eq('id', id);
+    }
 
-            return {
-              ...p,
-              timeline: [
-                {
-                  id: `t-${Date.now()}`,
-                  date: new Date().toISOString().split('T')[0],
-                  type: 'appointment',
-                  title,
-                  desc
-                },
-                ...p.timeline
-              ]
-            };
-          }
-          return p;
-        })
-      );
+    if (appInfo) {
+      const patient = patients.find((p) => p.id === appInfo.patientId);
+      if (patient) {
+        let title = 'Agendamento Atualizado';
+        let desc = `Consulta de ${appInfo.time} foi marcada como ${status}.`;
+        if (status === 'cancelado') {
+          title = 'Agendamento Cancelado';
+          desc = `Cancelado por motivo: ${cancelReason || 'Não informado'}.`;
+        } else if (status === 'atendido') {
+          title = 'Atendimento Realizado';
+          desc = `Paciente atendido e finalizado pelo profissional.`;
+        } else if (status === 'falta') {
+          title = 'Falta Registrada';
+          desc = `Paciente não compareceu ao horário agendado.`;
+        }
+
+        const updatedPatient = {
+          ...patient,
+          timeline: [
+            {
+              id: `t-${Date.now()}`,
+              date: new Date().toISOString().split('T')[0],
+              type: 'appointment',
+              title,
+              desc
+            },
+            ...patient.timeline
+          ]
+        };
+        updatePatient(updatedPatient);
+      }
     }
   };
 
   // Auxiliares de Fila de Espera
-  const addWaitlist = (item) => {
+  const addWaitlist = async (item) => {
     const newItem = {
       ...item,
       id: `w-${Date.now()}`,
-      dateAdded: new Date().toISOString().split('T')[0]
+      dateAdded: new Date().toISOString().split('T')[0],
+      shop_id: currentUser?.shopId || 'loja-1'
     };
+    
     setWaitlist((prev) => [...prev, newItem]);
+
+    if (isSupabaseConfigured) {
+      await supabase.from('waitlist').insert(newItem);
+    }
   };
 
-  const removeWaitlist = (id) => {
+  const removeWaitlist = async (id) => {
     setWaitlist((prev) => prev.filter((item) => item.id !== id));
+
+    if (isSupabaseConfigured) {
+      await supabase.from('waitlist').delete().eq('id', id);
+    }
   };
 
   // Auxiliares de Receitas e Óptica (OS)
@@ -182,27 +284,24 @@ export const AppProvider = ({ children }) => {
       date: new Date().toISOString().split('T')[0]
     };
 
-    setPatients((prev) =>
-      prev.map((p) => {
-        if (p.id === patientId) {
-          return {
-            ...p,
-            prescriptions: [newRx, ...p.prescriptions],
-            timeline: [
-              {
-                id: `t-${Date.now()}`,
-                date: newRx.date,
-                type: 'prescription',
-                title: 'Receita Oftalmológica Emitida',
-                desc: `OD Esf: ${rx.od.esferico} Cil: ${rx.od.cilindrico} | OE Esf: ${rx.oe.esferico} Cil: ${rx.oe.cilindrico}. Dr(a). ${rx.doctor}.`
-              },
-              ...p.timeline
-            ]
-          };
-        }
-        return p;
-      })
-    );
+    const patient = patients.find((p) => p.id === patientId);
+    if (patient) {
+      const updatedPatient = {
+        ...patient,
+        prescriptions: [newRx, ...patient.prescriptions],
+        timeline: [
+          {
+            id: `t-${Date.now()}`,
+            date: newRx.date,
+            type: 'prescription',
+            title: 'Receita Oftalmológica Emitida',
+            desc: `OD Esf: ${rx.od.esferico} Cil: ${rx.od.cilindrico} | OE Esf: ${rx.oe.esferico} Cil: ${rx.oe.cilindrico}. Dr(a). ${rx.doctor}.`
+          },
+          ...patient.timeline
+        ]
+      };
+      updatePatient(updatedPatient);
+    }
   };
 
   const addPurchase = (patientId, purchase) => {
@@ -210,83 +309,87 @@ export const AppProvider = ({ children }) => {
       ...purchase,
       id: `pur-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
-      status: 'Aguardando Laboratório' // Aguardando Laboratório, Em Produção, Pronto para Retirada, Entregue, Aguardando Pagamento
+      status: 'Aguardando Laboratório',
+      shop_id: currentUser?.shopId || 'loja-1'
     };
 
-    setPatients((prev) =>
-      prev.map((p) => {
-        if (p.id === patientId) {
-          return {
-            ...p,
-            purchases: [newPurchase, ...p.purchases],
-            timeline: [
-              {
-                id: `t-${Date.now()}`,
-                date: newPurchase.date,
-                type: 'purchase',
-                title: `Nova Ordem de Serviço criada (${newPurchase.osNumber})`,
-                desc: `Item: ${purchase.item} - Valor: R$ ${parseFloat(purchase.value).toFixed(2)}. Status: ${newPurchase.status}`
-              },
-              ...p.timeline
-            ]
-          };
-        }
-        return p;
-      })
-    );
+    const patient = patients.find((p) => p.id === patientId);
+    if (patient) {
+      const updatedPatient = {
+        ...patient,
+        purchases: [newPurchase, ...patient.purchases],
+        timeline: [
+          {
+            id: `t-${Date.now()}`,
+            date: newPurchase.date,
+            type: 'purchase',
+            title: `Nova Ordem de Serviço criada (${newPurchase.osNumber})`,
+            desc: `Item: ${purchase.item} - Valor: R$ ${parseFloat(purchase.value).toFixed(2)}. Status: ${newPurchase.status}`
+          },
+          ...patient.timeline
+        ]
+      };
+      updatePatient(updatedPatient);
+    }
   };
 
   const updatePurchaseStatus = (patientId, purchaseId, status) => {
-    setPatients((prev) =>
-      prev.map((p) => {
-        if (p.id === patientId) {
-          const updatedPurchases = p.purchases.map((pur) => {
-            if (pur.id === purchaseId) {
-              return { ...pur, status };
-            }
-            return pur;
-          });
-
-          const targetPurchase = p.purchases.find((pur) => pur.id === purchaseId);
-          const osName = targetPurchase ? targetPurchase.osNumber : 'OS';
-
-          // Se o novo status não for pendente de pagamento, verifica se ainda resta alguma OS com débito
-          const hasUnpaid = updatedPurchases.some((pur) => pur.status === 'Aguardando Pagamento');
-          let updatedAlerts = p.alerts || [];
-          if (!hasUnpaid && status !== 'Aguardando Pagamento') {
-            updatedAlerts = updatedAlerts.filter(
-              (a) =>
-                !(
-                  a.type === 'administrative' &&
-                  (a.text.toLowerCase().includes('inadimplente') || a.text.toLowerCase().includes('pagamento'))
-                )
-            );
-          }
-
-          return {
-            ...p,
-            alerts: updatedAlerts,
-            purchases: updatedPurchases,
-            timeline: [
-              {
-                id: `t-${Date.now()}`,
-                date: new Date().toISOString().split('T')[0],
-                type: 'purchase',
-                title: `Ordem de Serviço Atualizada (${osName})`,
-                desc: `Status alterado para: ${status}`
-              },
-              ...p.timeline
-            ]
-          };
+    const patient = patients.find((p) => p.id === patientId);
+    if (patient) {
+      const updatedPurchases = patient.purchases.map((pur) => {
+        if (pur.id === purchaseId) {
+          return { ...pur, status };
         }
-        return p;
-      })
-    );
+        return pur;
+      });
+
+      const targetPurchase = patient.purchases.find((pur) => pur.id === purchaseId);
+      const osName = targetPurchase ? targetPurchase.osNumber : 'OS';
+
+      const hasUnpaid = updatedPurchases.some((pur) => pur.status === 'Aguardando Pagamento');
+      let updatedAlerts = patient.alerts || [];
+      if (!hasUnpaid && status !== 'Aguardando Pagamento') {
+        updatedAlerts = updatedAlerts.filter(
+          (a) =>
+            !(
+              a.type === 'administrative' &&
+              (a.text.toLowerCase().includes('inadimplente') || a.text.toLowerCase().includes('pagamento'))
+            )
+        );
+      }
+
+      const updatedPatient = {
+        ...patient,
+        alerts: updatedAlerts,
+        purchases: updatedPurchases,
+        timeline: [
+          {
+            id: `t-${Date.now()}`,
+            date: new Date().toISOString().split('T')[0],
+            type: 'purchase',
+            title: `Ordem de Serviço Atualizada (${osName})`,
+            desc: `Status alterado para: ${status}`
+          },
+          ...patient.timeline
+        ]
+      };
+      updatePatient(updatedPatient);
+    }
+  };
+
+  const logout = async () => {
+    if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+    }
+    setCurrentUser(null);
   };
 
   return (
     <AppContext.Provider
       value={{
+        currentUser,
+        setCurrentUser,
+        logout,
         patients,
         appointments,
         waitlist,

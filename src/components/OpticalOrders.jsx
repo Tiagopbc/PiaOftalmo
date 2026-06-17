@@ -3,18 +3,25 @@ import { AppContext } from '../context/AppContext';
 import { ShoppingBag, Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const OpticalOrders = () => {
-  const { patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId } = useContext(AppContext);
+  const { currentUser, patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Obter todas as ordens de serviço de todos os pacientes
+  const userShopId = currentUser?.shopId;
+
+  // Obter todas as ordens de serviço de todos os pacientes e filtrar pela loja ativa
   const allOrders = patients.flatMap((p) =>
     (p.purchases || []).map((pur) => ({
       ...pur,
       patientName: p.name,
       patientId: p.id
     }))
-  ).sort((a, b) => new Date(b.date) - new Date(a.date));
+  ).filter((order) => {
+    if (userShopId && userShopId !== 'all') {
+      return !order.shop_id || order.shop_id === userShopId;
+    }
+    return true;
+  }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
   // Filtrar ordens
   const filteredOrders = allOrders.filter((order) => {

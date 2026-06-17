@@ -4,6 +4,7 @@ import { DollarSign, Percent, AlertCircle, CheckSquare, Search, Eye, Users } fro
 
 const FinanceManager = () => {
   const {
+    currentUser,
     patients,
     appointments,
     updatePurchaseStatus,
@@ -14,6 +15,10 @@ const FinanceManager = () => {
 
   const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats
   const [selectedProfId, setSelectedProfId] = useState(professionals[0]?.id || '1');
+  const [selectedShopFilter, setSelectedShopFilter] = useState(() => {
+    // Inicializar com a loja do usuário (se for admin geral, começa em 'all')
+    return currentUser?.shopId || 'all';
+  });
 
   // Preço padrão para consultas particulares (para fins de simulação financeira)
   const PRIVATE_CONSULTATION_PRICE = 350.00;
@@ -28,19 +33,30 @@ const FinanceManager = () => {
     }))
   );
 
-  // Calcular métricas
-  const totalOpticalSales = allPurchases
+  // Filtrar dados pela loja selecionada
+  const filteredPurchases = allPurchases.filter((pur) => {
+    if (selectedShopFilter === 'all') return true;
+    return pur.shop_id === selectedShopFilter;
+  });
+
+  const filteredAppointments = appointments.filter((app) => {
+    if (selectedShopFilter === 'all') return true;
+    return app.shop_id === selectedShopFilter;
+  });
+
+  // Calcular métricas com base nos filtros
+  const totalOpticalSales = filteredPurchases
     .filter((pur) => pur.status !== 'Cancelado')
     .reduce((acc, pur) => acc + parseFloat(pur.value || 0), 0);
 
   // Consultas particulares faturadas (apenas atendidas)
-  const atendidoParticularApps = appointments.filter(
+  const atendidoParticularApps = filteredAppointments.filter(
     (app) => app.paymentType === 'particular' && app.status === 'atendido'
   );
   const totalClinicalPrivateSales = atendidoParticularApps.length * PRIVATE_CONSULTATION_PRICE;
 
   // Consultas por convênio faturadas (apenas atendidas)
-  const atendidoInsuranceApps = appointments.filter(
+  const atendidoInsuranceApps = filteredAppointments.filter(
     (app) => app.paymentType === 'convenio' && app.status === 'atendido'
   );
   const totalClinicalInsuranceSales = atendidoInsuranceApps.length * INSURANCE_CONSULTATION_FEE;
@@ -49,7 +65,7 @@ const FinanceManager = () => {
   const totalRevenue = totalOpticalSales + totalClinicalSales;
 
   // Contas a receber (OS pendentes de pagamento)
-  const unpaidPurchases = allPurchases.filter((pur) => pur.status === 'Aguardando Pagamento');
+  const unpaidPurchases = filteredPurchases.filter((pur) => pur.status === 'Aguardando Pagamento');
   const totalReceivables = unpaidPurchases.reduce((acc, pur) => acc + parseFloat(pur.value || 0), 0);
 
   // Manipular redirecionamento para o paciente
@@ -64,9 +80,9 @@ const FinanceManager = () => {
     alert('Pagamento recebido com sucesso! A Ordem de Serviço foi marcada como Entregue e o alerta financeiro foi removido do prontuário.');
   };
 
-  // Calcular comissões para o profissional selecionado
+  // Calcular comissões para o profissional selecionado com base nos atendimentos filtrados
   const selectedProf = professionals.find((p) => p.id === selectedProfId);
-  const profApps = appointments.filter(
+  const profApps = filteredAppointments.filter(
     (app) => app.professionalId === selectedProfId && app.status === 'atendido'
   );
 
@@ -80,9 +96,28 @@ const FinanceManager = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '28px', fontWeight: 700 }}>Gestão Financeira</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Demonstrativo financeiro da clínica e da ótica integrada</p>
+      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h2 style={{ fontSize: '28px', fontWeight: 700 }}>Gestão Financeira</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Demonstrativo financeiro da clínica e da ótica integrada</p>
+        </div>
+
+        {/* Seletor de filial para consolidado vs individual */}
+        {currentUser?.shopId === 'all' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600 }}>Filial:</label>
+            <select
+              className="form-control"
+              style={{ width: '220px', padding: '8px' }}
+              value={selectedShopFilter}
+              onChange={(e) => setSelectedShopFilter(e.target.value)}
+            >
+              <option value="all">Todas as Filiais (Consolidado)</option>
+              <option value="loja-1">Filial 1 - Centro</option>
+              <option value="loja-2">Filial 2 - Shopping</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Grid de Métricas Financeiras */}
@@ -218,7 +253,7 @@ const FinanceManager = () => {
           {/* Aba: Comissões */}
           {activeSubTab === 'commissions' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h4 style={{ fontSize: '16px', margin: '0 0 4px' }}>Cálculo de Comissões de Atendimento</h4>
                   <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
@@ -243,9 +278,9 @@ const FinanceManager = () => {
 
               {/* Detalhes de repasse do profissional */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
-                <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)' }}>
+                <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', height: 'fit-content' }}>
                   <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                    <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', fontSize: '24px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyOrigin: 'center', margin: '0 auto 12px', justifyContent: 'center' }}>
+                    <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', fontSize: '24px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
                       {selectedProf?.name.split(' ').slice(-1)[0][0]}
                     </div>
                     <h5 style={{ fontSize: '16px', margin: 0 }}>{selectedProf?.name}</h5>
@@ -272,15 +307,14 @@ const FinanceManager = () => {
                   <h5 style={{ fontSize: '14px', marginBottom: '12px' }}>Atendimentos Faturados</h5>
                   {profApps.length === 0 ? (
                     <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-                      Nenhum atendimento finalizado registrado para este especialista.
+                      Nenhum atendimento finalizado registrado para este especialista na filial selecionada.
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
                       {profApps.map((app) => {
-                        const appValue = app.paymentType === 'particular' ? PRIVATE_CONSULTATION_PRICE : INSURANCE_CONSULTATION_FEE;
                         const commValue = app.paymentType === 'particular' ? (PRIVATE_CONSULTATION_PRICE * 0.40) : 40.00;
                         return (
-                          <div key={app.id} style={{ display: 'flex', justifyOrigin: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#fff', justifyContent: 'space-between', fontSize: '13px' }}>
+                          <div key={app.id} style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#fff', justifyContent: 'space-between', fontSize: '13px' }}>
                             <div>
                               <strong style={{ color: 'var(--bg-dark)' }}>{app.patientName}</strong>
                               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -309,7 +343,7 @@ const FinanceManager = () => {
               <div style={{ marginBottom: '20px' }}>
                 <h4 style={{ fontSize: '16px', margin: '0 0 4px' }}>Composição do Faturamento</h4>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
-                  Divisão visual das origens do faturamento entre serviços médicos e vendas da ótica.
+                  Divisão visual das origens do faturamento entre serviços médicos e vendas da ótica na filial selecionada.
                 </p>
               </div>
 

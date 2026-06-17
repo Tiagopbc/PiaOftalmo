@@ -17,6 +17,7 @@ import {
 
 const AgendaManager = () => {
   const {
+    currentUser,
     patients,
     appointments,
     waitlist,
@@ -27,6 +28,8 @@ const AgendaManager = () => {
     addWaitlist,
     removeWaitlist
   } = useContext(AppContext);
+
+  const userShopId = currentUser?.shopId;
 
   // Filtros da Agenda
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -135,13 +138,22 @@ const AgendaManager = () => {
     });
   };
 
-  // Filtragem dos agendamentos do dia de acordo com as seleções
+  // Filtragem dos agendamentos do dia de acordo com as seleções e filial
   const dailyAppointments = appointments.filter((app) => {
     if (app.date !== selectedDate) return false;
     if (filterProfessional !== 'all' && app.professionalId !== filterProfessional) return false;
     if (filterRoom !== 'all' && app.roomId !== filterRoom) return false;
+
+    // Filtro por Loja/Filial
+    if (userShopId && userShopId !== 'all') {
+      if (app.shop_id && app.shop_id !== userShopId) return false;
+    }
     return true;
   });
+
+  const filteredWaitlist = waitlist.filter(
+    (item) => !userShopId || userShopId === 'all' || item.shop_id === userShopId || !item.shop_id
+  );
 
   return (
     <div className="section-grid">
@@ -304,10 +316,10 @@ const AgendaManager = () => {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-            {waitlist.length === 0 ? (
+            {filteredWaitlist.length === 0 ? (
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Fila de espera vazia.</span>
             ) : (
-              waitlist.map((item) => (
+              filteredWaitlist.map((item) => (
                 <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '8px 12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', backgroundColor: '#fff', fontSize: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                     <span>{item.patientName}</span>
