@@ -378,6 +378,21 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const [clinicSettings, setClinicSettings] = useState(() => {
+    const local = localStorage.getItem('pia_clinic_settings');
+    return local ? JSON.parse(local) : {
+      name: 'Centro Visual Optometria',
+      address: 'Av. Quatro, Nº 01, Sl. 02 - Cohab Anil IV - São Luís/MA',
+      cep: '65050-700',
+      phone: '(98) 98815-4507'
+    };
+  });
+
+  const updateClinicSettings = (newSettings) => {
+    setClinicSettings(newSettings);
+    localStorage.setItem('pia_clinic_settings', JSON.stringify(newSettings));
+  };
+
   const logout = async () => {
     if (isSupabaseConfigured) {
       await supabase.auth.signOut();
@@ -411,7 +426,9 @@ export const AppProvider = ({ children }) => {
         addPurchase,
         updatePurchaseStatus,
         activePrintData,
-        setActivePrintData
+        setActivePrintData,
+        clinicSettings,
+        updateClinicSettings
       }}
     >
       {children}

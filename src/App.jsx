@@ -9,6 +9,7 @@ const PatientManager = lazy(() => import('./components/PatientManager'));
 const AgendaManager = lazy(() => import('./components/AgendaManager'));
 const OpticalOrders = lazy(() => import('./components/OpticalOrders'));
 const FinanceManager = lazy(() => import('./components/FinanceManager'));
+const SettingsManager = lazy(() => import('./components/SettingsManager'));
 import {
   LayoutDashboard,
   Users,
@@ -16,11 +17,12 @@ import {
   Glasses,
   DollarSign,
   LogOut,
-  Store
+  Store,
+  Settings
 } from 'lucide-react';
 
 function App() {
-  const { currentUser, logout, activeTab, setActiveTab, activePrintData } = useContext(AppContext);
+  const { currentUser, logout, activeTab, setActiveTab, activePrintData, clinicSettings } = useContext(AppContext);
 
   // Se não estiver logado, exibe tela de login
   if (!currentUser) {
@@ -51,6 +53,7 @@ function App() {
 
     if (role === 'admin') {
       items.push({ id: 'finance', label: 'Financeiro', icon: <DollarSign size={20} /> });
+      items.push({ id: 'settings', label: 'Ajustes', icon: <Settings size={20} /> });
     }
 
     return items;
@@ -76,6 +79,8 @@ function App() {
         return <OpticalOrders />;
       case 'finance':
         return <FinanceManager />;
+      case 'settings':
+        return <SettingsManager />;
       default:
         return <Dashboard />;
     }
@@ -266,7 +271,7 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '24px' }}>
               <div style={{ textAlign: 'center' }}>
                 <h2 style={{ fontSize: '26px', fontWeight: 'bold', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  Centro Visual
+                  {clinicSettings?.name || 'Centro Visual'}
                 </h2>
                 <p style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '2px', textTransform: 'uppercase', color: '#555', margin: 0 }}>
                   Optometria & Saúde Visual
@@ -402,9 +407,9 @@ function App() {
             {/* SIGNATURE / STAMP */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '60px' }}>
               <div style={{ fontSize: '10px', color: '#555', maxWidth: '300px', lineHeight: '1.4' }}>
-                <p style={{ margin: '0 0 4px' }}><strong>Centro Visual Optometria</strong></p>
-                <p style={{ margin: 0 }}>Av. Quatro, Nº 01, Sl. 02 - Cohab Anil IV - São Luís/MA</p>
-                <p style={{ margin: 0 }}>CEP: 65050-700 | WhatsApp: (98) 98815-4507</p>
+                <p style={{ margin: '0 0 4px' }}><strong>{clinicSettings?.name || 'Centro Visual Optometria'}</strong></p>
+                <p style={{ margin: 0 }}>{clinicSettings?.address || 'Av. Quatro, Nº 01, Sl. 02 - Cohab Anil IV - São Luís/MA'}</p>
+                <p style={{ margin: 0 }}>CEP: {clinicSettings?.cep || '65050-700'} | Contato: {clinicSettings?.phone || '(98) 98815-4507'}</p>
               </div>
               <div style={{ textAlign: 'center', width: '250px' }}>
                 <div style={{ minHeight: '60px' }}></div>

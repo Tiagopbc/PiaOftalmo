@@ -15,19 +15,11 @@ const FinanceManager = () => {
     professionals
   } = useContext(AppContext);
 
-  const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats, config
+  const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats
   const [selectedProfId, setSelectedProfId] = useState(professionals[0]?.id || '1');
   const [selectedShopFilter, setSelectedShopFilter] = useState(() => {
     return currentUser?.shopId || 'all';
   });
-
-  // Campos para cadastro de colaborador
-  const [empName, setEmpName] = useState('');
-  const [empEmail, setEmpEmail] = useState('');
-  const [empPassword, setEmpPassword] = useState('');
-  const [empRole, setEmpRole] = useState('recepcao');
-  const [empShop, setEmpShop] = useState('loja-1');
-  const [loadingRegister, setLoadingRegister] = useState(false);
 
   // Preço padrão para consultas particulares (para fins de simulação financeira)
   const PRIVATE_CONSULTATION_PRICE = 350.00;
@@ -105,50 +97,7 @@ const FinanceManager = () => {
     total: totalCommission
   } = calculateCommission(profPrivateApps.length, profInsuranceApps.length, PRIVATE_CONSULTATION_PRICE);
 
-  // Handler para cadastrar funcionário
-  const handleRegisterEmployee = async (e) => {
-    e.preventDefault();
-    if (empPassword.length < 6) {
-      alert('A senha deve ter no mínimo 6 caracteres!');
-      return;
-    }
 
-    setLoadingRegister(true);
-
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await supabase.auth.signUp({
-          email: empEmail,
-          password: empPassword,
-          options: {
-            data: {
-              name: empName,
-              role: empRole,
-              shop_id: empShop
-            }
-          }
-        });
-
-        if (error) throw error;
-
-        alert(`Colaborador "${empName}" cadastrado no Supabase com sucesso!`);
-        setEmpName('');
-        setEmpEmail('');
-        setEmpPassword('');
-      } catch (err) {
-        alert('Erro ao cadastrar colaborador no Supabase: ' + err.message);
-      } finally {
-        setLoadingRegister(false);
-      }
-    } else {
-      // Simulação para o modo Demo
-      alert(`[SIMULAÇÃO OFFLINE] Login de funcionário criado com sucesso!\nNome: ${empName}\nE-mail: ${empEmail}\nFunção: ${empRole}\nFilial: ${empShop}`);
-      setEmpName('');
-      setEmpEmail('');
-      setEmpPassword('');
-      setLoadingRegister(false);
-    }
-  };
 
 
 
@@ -244,13 +193,7 @@ const FinanceManager = () => {
             >
               Distribuição de Faturamento
             </button>
-            <button
-              className={`tab-btn ${activeSubTab === 'config' ? 'active' : ''}`}
-              onClick={() => setActiveSubTab('config')}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <Settings size={14} /> Configurações
-            </button>
+
           </div>
 
           {/* Aba: Contas a Receber */}
@@ -459,69 +402,13 @@ const FinanceManager = () => {
                         <span>Repasses de Convênio (Unimed)</span>
                         <strong>R$ {totalClinicalInsuranceSales.toFixed(2)} ({totalClinicalSales > 0 ? ((totalClinicalInsuranceSales / totalClinicalSales) * 100).toFixed(0) : 0}%)</strong>
                       </div>
-                <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${totalClinicalSales > 0 ? (totalClinicalInsuranceSales / totalClinicalSales) * 100 : 0}%`, height: '100%', backgroundColor: '#0284c7', borderRadius: '4px' }}></div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Aba: Configuração da Clínica [NOVO] */}
-          {activeSubTab === 'config' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-              
-              {/* Cadastro de Colaborador */}
-              <div style={{ maxWidth: '480px' }}>
-                <h4 style={{ fontSize: '16px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <UserPlus size={18} color="var(--primary)" /> Cadastrar Colaborador
-                </h4>
-                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '16px' }}>
-                  Cria logins para funcionários diretamente com permissões e filiais embutidas.
-                </p>
-
-                <form onSubmit={handleRegisterEmployee}>
-                  <div className="form-group">
-                    <label>Nome Completo*</label>
-                    <input type="text" className="form-control" required value={empName} onChange={(e) => setEmpName(e.target.value)} disabled={loadingRegister} />
-                  </div>
-                  <div className="form-group">
-                    <label>E-mail*</label>
-                    <input type="email" className="form-control" required value={empEmail} onChange={(e) => setEmpEmail(e.target.value)} disabled={loadingRegister} />
-                  </div>
-                  <div className="form-group">
-                    <label>Senha Provisória*</label>
-                    <input type="password" placeholder="Mínimo 6 dígitos" className="form-control" required value={empPassword} onChange={(e) => setEmpPassword(e.target.value)} disabled={loadingRegister} />
-                  </div>
-                  
-                  <div className="form-grid">
-                    <div className="form-group">
-                      <label>Função (Acesso)</label>
-                      <select className="form-control" value={empRole} onChange={(e) => setEmpRole(e.target.value)} disabled={loadingRegister}>
-                        <option value="recepcao">Recepção</option>
-                        <option value="medico">Especialista (Médico)</option>
-                        <option value="vendedor">Vendedor (Óptica)</option>
-                        <option value="admin">Administrador Geral</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Filial Atribuída</label>
-                      <select className="form-control" value={empShop} onChange={(e) => setEmpShop(e.target.value)} disabled={loadingRegister}>
-                        <option value="loja-1">Filial 1 - Centro</option>
-                        <option value="loja-2">Filial 2 - Shopping</option>
-                        <option value="all">Todas as Filiais</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ width: '100%', marginTop: '8px', padding: '10px' }} disabled={loadingRegister}>
-                    {loadingRegister ? 'Registrando...' : 'Criar Conta de Acesso'}
-                  </button>
-                </form>
-              </div>
-
             </div>
           )}
         </div>
