@@ -1,17 +1,23 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ShoppingBag, Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer } from 'lucide-react';
+import { ShoppingBag, Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer, FlaskConical } from 'lucide-react';
 
 const OpticalOrders = () => {
   const { currentUser, patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId, setActivePrintData } = useContext(AppContext);
 
-  const triggerPrintOS = (order) => {
+  const triggerPrintOS = (order, printType = 'cliente') => {
     const patientObj = patients.find(p => p.id === order.patientId);
+    const latestRx = patientObj && patientObj.prescriptions && patientObj.prescriptions.length > 0
+      ? patientObj.prescriptions[0]
+      : null;
+
     setActivePrintData({
       type: 'os',
+      printType,
       data: order,
       patientName: order.patientName,
-      patientCpf: patientObj ? patientObj.cpf : ''
+      patientCpf: patientObj ? patientObj.cpf : '',
+      rx: latestRx
     });
     // Dar tempo para o DOM renderizar
     setTimeout(() => {
@@ -246,12 +252,21 @@ const OpticalOrders = () => {
                           </button>
 
                           <button
-                            onClick={() => triggerPrintOS(order)}
+                            onClick={() => triggerPrintOS(order, 'cliente')}
                             className="btn btn-secondary btn-sm"
                             style={{ padding: '6px' }}
                             title="Imprimir Via do Cliente (OS)"
                           >
                             <Printer size={14} />
+                          </button>
+
+                          <button
+                            onClick={() => triggerPrintOS(order, 'laboratorio')}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '6px' }}
+                            title="Imprimir Via do Laboratório (OS)"
+                          >
+                            <FlaskConical size={14} />
                           </button>
                         </div>
                       </td>

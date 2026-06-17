@@ -13,7 +13,9 @@ import {
   Paperclip,
   Check,
   Eye,
-  Calendar
+  Calendar,
+  Printer,
+  FlaskConical
 } from 'lucide-react';
 
 const PatientManager = () => {
@@ -39,6 +41,28 @@ const PatientManager = () => {
       patientCpf: selectedPatient.cpf
     });
     // Dar um pequeno tempo para o DOM renderizar antes de chamar a janela de impressão
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  const triggerPrintOS = (purchase, printType = 'cliente') => {
+    const latestRx = selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0
+      ? selectedPatient.prescriptions[0]
+      : null;
+
+    setActivePrintData({
+      type: 'os',
+      printType,
+      data: {
+        ...purchase,
+        patientId: selectedPatient.id
+      },
+      patientName: selectedPatient.name,
+      patientCpf: selectedPatient.cpf,
+      rx: latestRx
+    });
+    // Dar tempo para o DOM renderizar
     setTimeout(() => {
       window.print();
     }, 150);
@@ -853,19 +877,39 @@ const PatientManager = () => {
                             <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', backgroundColor: '#e2e8f0', color: '#475569' }}>
                               {pur.status}
                             </span>
-                            <select
-                              value={pur.status}
-                              onChange={(e) => updatePurchaseStatus(selectedPatient.id, pur.id, e.target.value)}
-                              className="form-control"
-                              style={{ width: '150px', fontSize: '11px', padding: '4px' }}
-                            >
-                              <option>Aguardando Laboratório</option>
-                              <option>Em Produção</option>
-                              <option>Pronto para Retirada</option>
-                              <option>Entregue</option>
-                              <option>Aguardando Pagamento</option>
-                              <option>Cancelado</option>
-                            </select>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                              <select
+                                value={pur.status}
+                                onChange={(e) => updatePurchaseStatus(selectedPatient.id, pur.id, e.target.value)}
+                                className="form-control"
+                                style={{ width: '130px', fontSize: '11px', padding: '4px' }}
+                              >
+                                <option>Aguardando Laboratório</option>
+                                <option>Em Produção</option>
+                                <option>Pronto para Retirada</option>
+                                <option>Entregue</option>
+                                <option>Aguardando Pagamento</option>
+                                <option>Cancelado</option>
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => triggerPrintOS(pur, 'cliente')}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 6px', height: 'auto' }}
+                                title="Via do Cliente"
+                              >
+                                <Printer size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => triggerPrintOS(pur, 'laboratorio')}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 6px', height: 'auto' }}
+                                title="Via do Laboratório"
+                              >
+                                <FlaskConical size={12} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))
