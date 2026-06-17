@@ -14,8 +14,6 @@ import {
   Users,
   CalendarDays,
   Glasses,
-  Smartphone,
-  X,
   DollarSign,
   LogOut,
   Store
@@ -23,44 +21,6 @@ import {
 
 function App() {
   const { currentUser, logout, activeTab, setActiveTab, activePrintData } = useContext(AppContext);
-  const [showPwaBanner, setShowPwaBanner] = useState(true);
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-
-  // Capturar evento de instalação do PWA
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowPwaBanner(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setShowPwaBanner(false);
-    }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallPwa = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        console.log('Usuário aceitou a instalação do PWA');
-      }
-      setDeferredPrompt(null);
-      setShowPwaBanner(false);
-    } else {
-      alert(
-        'Instalação Simulada! Para instalar em seu dispositivo móvel, use a opção "Adicionar à Tela de Início" nas configurações do seu navegador.'
-      );
-      setShowPwaBanner(false);
-    }
-  };
 
   // Se não estiver logado, exibe tela de login
   if (!currentUser) {
@@ -250,30 +210,6 @@ function App() {
 
       {/* Main Content Pane */}
       <main className="main-content">
-        {/* PWA Banner */}
-        {showPwaBanner && (
-          <div className="pwa-banner">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Smartphone size={24} style={{ color: 'var(--accent)' }} />
-              <div className="pwa-banner-text">
-                <h4>Instale o PIA Oftalmo no seu celular</h4>
-                <p>Acesse offline, de forma rápida e segura a qualquer momento sem usar espaço do seu telefone.</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button className="btn btn-primary btn-sm" onClick={handleInstallPwa}>
-                Instalar App
-              </button>
-              <button
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
-                onClick={() => setShowPwaBanner(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Dynamic page component with lazy loading fallback */}
         <Suspense fallback={
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px' }}>
