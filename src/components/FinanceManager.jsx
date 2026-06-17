@@ -3,6 +3,7 @@ import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { seedDatabase } from '../utils/seedSupabase';
 import { DollarSign, Percent, AlertCircle, CheckSquare, Search, Eye, Users, Settings, UserPlus, Database } from 'lucide-react';
+import { calculateCommission } from '../utils/helpers';
 
 const FinanceManager = () => {
   const {
@@ -100,9 +101,11 @@ const FinanceManager = () => {
   const profPrivateApps = profApps.filter((app) => app.paymentType === 'particular');
   const profInsuranceApps = profApps.filter((app) => app.paymentType === 'convenio');
 
-  const privateCommission = profPrivateApps.length * (PRIVATE_CONSULTATION_PRICE * 0.40);
-  const insuranceCommission = profInsuranceApps.length * 40.00;
-  const totalCommission = privateCommission + insuranceCommission;
+  const {
+    privateCommission,
+    insuranceCommission,
+    total: totalCommission
+  } = calculateCommission(profPrivateApps.length, profInsuranceApps.length, PRIVATE_CONSULTATION_PRICE);
 
   // Handler para cadastrar funcionário
   const handleRegisterEmployee = async (e) => {
@@ -388,7 +391,11 @@ const FinanceManager = () => {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
                       {profApps.map((app) => {
-                        const commValue = app.paymentType === 'particular' ? (PRIVATE_CONSULTATION_PRICE * 0.40) : 40.00;
+                        const commValue = calculateCommission(
+                          app.paymentType === 'particular' ? 1 : 0,
+                          app.paymentType === 'convenio' ? 1 : 0,
+                          PRIVATE_CONSULTATION_PRICE
+                        ).total;
                         return (
                           <div key={app.id} style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#fff', justifyContent: 'space-between', fontSize: '13px' }}>
                             <div>

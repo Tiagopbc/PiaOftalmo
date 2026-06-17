@@ -1,11 +1,14 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
 import { AppContext } from './context/AppContext';
-import Dashboard from './components/Dashboard';
-import PatientManager from './components/PatientManager';
-import AgendaManager from './components/AgendaManager';
-import OpticalOrders from './components/OpticalOrders';
-import FinanceManager from './components/FinanceManager';
 import Login from './components/Login';
+import { formatLabName } from './utils/helpers';
+
+// Lazy loading component tabs for bundle optimization
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const PatientManager = lazy(() => import('./components/PatientManager'));
+const AgendaManager = lazy(() => import('./components/AgendaManager'));
+const OpticalOrders = lazy(() => import('./components/OpticalOrders'));
+const FinanceManager = lazy(() => import('./components/FinanceManager'));
 import {
   LayoutDashboard,
   Users,
@@ -271,8 +274,15 @@ function App() {
           </div>
         )}
 
-        {/* Dynamic page component */}
-        {renderActiveTab()}
+        {/* Dynamic page component with lazy loading fallback */}
+        <Suspense fallback={
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px' }}>
+            <div className="loader" style={{ width: '40px', height: '40px' }}></div>
+            <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: '500' }}>Carregando painel...</span>
+          </div>
+        }>
+          {renderActiveTab()}
+        </Suspense>
       </main>
 
       {/* Bottom Navigation - Mobile Tab Bar */}
@@ -378,12 +388,7 @@ function App() {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: '0 0 4px' }}>
-                    <strong>Paciente (Identificação):</strong> {(() => {
-                      const name = activePrintData.patientName || '';
-                      const names = name.trim().split(/\s+/);
-                      if (names.length <= 1) return name;
-                      return `${names[0]} ${names.slice(1).map(n => n[0].toUpperCase() + '.').join(' ')}`;
-                    })()}
+                    <strong>Paciente (Identificação):</strong> {formatLabName(activePrintData.patientName)}
                   </p>
                   <p style={{ margin: 0, color: '#555' }}><strong>Status do Pedido:</strong> {activePrintData.data.status}</p>
                 </div>
