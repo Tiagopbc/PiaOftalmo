@@ -36,7 +36,9 @@ self.addEventListener('fetch', (e) => {
   // Nunca cachear o servidor de desenvolvimento. Isso evita versões antigas
   // dos componentes durante testes no localhost.
   if (requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1') {
-    e.respondWith(fetch(e.request));
+    e.respondWith(
+      fetch(e.request).catch(() => new Response(null, { status: 503, statusText: 'Offline' }))
+    );
     return;
   }
 
@@ -48,7 +50,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
           return response;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('/index.html').then(res => res || new Response('Offline', { status: 503, statusText: 'Offline' })))
     );
     return;
   }
@@ -76,8 +78,9 @@ self.addEventListener('fetch', (e) => {
       }).catch(() => {
         // Fallback offline para navegações principais
         if (e.request.mode === 'navigate') {
-          return caches.match('/index.html');
+          return caches.match('/index.html').then(res => res || new Response('Offline', { status: 503, statusText: 'Offline' }));
         }
+        return new Response(null, { status: 503, statusText: 'Offline' });
       });
     })
   );
