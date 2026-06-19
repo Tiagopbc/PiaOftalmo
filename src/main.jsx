@@ -7,7 +7,7 @@ import { AppProvider } from './context/AppContext'
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     if (import.meta.env.PROD) {
-      navigator.serviceWorker.register('/sw.js').catch((error) => {
+      navigator.serviceWorker.register('/sw.js?v=3').catch((error) => {
         console.warn('Não foi possível ativar o modo offline.', error)
       })
       return
