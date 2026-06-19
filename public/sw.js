@@ -33,6 +33,12 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const requestUrl = new URL(e.request.url);
 
+  // Ignorar requisições que não são GET (como POST, PUT, DELETE)
+  // e requisições para APIs externas como o Supabase
+  if (e.request.method !== 'GET' || requestUrl.hostname.includes('supabase.co')) {
+    return;
+  }
+
   // Nunca cachear o servidor de desenvolvimento. Isso evita versões antigas
   // dos componentes durante testes no localhost.
   if (requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1') {

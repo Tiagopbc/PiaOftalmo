@@ -50,7 +50,11 @@ const Login = () => {
 
       setCurrentUser(getAuthUserProfile(data.user));
     } catch (err) {
-      setError(err.message || 'Erro ao realizar login.');
+      let errorMessage = err.message || 'Erro ao realizar login.';
+      if (errorMessage === '{}' || typeof errorMessage !== 'string') {
+        errorMessage = 'Erro de conexão ou serviço indisponível. Verifique sua internet ou bloqueadores de anúncios.';
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
