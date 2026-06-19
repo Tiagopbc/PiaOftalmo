@@ -1,12 +1,7 @@
-const CACHE_NAME = 'pia-oftalmo-v1';
+const CACHE_NAME = 'pia-oftalmo-v2';
 const ASSETS = [
   '/',
   '/index.html',
-  '/src/main.jsx',
-  '/src/App.jsx',
-  '/src/index.css',
-  '/src/context/AppContext.jsx',
-  '/src/utils/mockData.js',
   '/manifest.json',
   '/favicon.svg'
 ];
@@ -36,6 +31,28 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  const requestUrl = new URL(e.request.url);
+
+  // Nunca cachear o servidor de desenvolvimento. Isso evita versões antigas
+  // dos componentes durante testes no localhost.
+  if (requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1') {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       if (cachedResponse) {

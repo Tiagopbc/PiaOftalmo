@@ -27,6 +27,37 @@ export const PAYMENT_TYPES = [
   { id: 'cortesia', name: 'Cortesia' }
 ];
 
+const createDemoPatient = ({ id, name, cpf, birthDate, gender, phone, notes, shopId, alerts = [] }) => ({
+  id,
+  name,
+  cpf,
+  rg: '',
+  birthDate,
+  gender,
+  phone,
+  whatsapp: phone,
+  email: '',
+  address: 'São Luís - MA',
+  isMinor: false,
+  guardian: { name: '', cpf: '', phone: '' },
+  alerts,
+  notes,
+  timeline: [
+    {
+      id: `timeline-${id}`,
+      date: '2026-06-18',
+      type: 'system',
+      title: 'Cadastro de teste criado',
+      desc: 'Paciente fictício disponível para validação do sistema.'
+    }
+  ],
+  prescriptions: [],
+  purchases: [],
+  exams: [],
+  attachments: [],
+  shop_id: shopId
+});
+
 export const INITIAL_PATIENTS = [
   {
     id: 'pat-1',
@@ -159,7 +190,79 @@ export const INITIAL_PATIENTS = [
     ],
     exams: [],
     attachments: []
-  }
+  },
+  createDemoPatient({
+    id: 'pat-4',
+    name: 'Ana Clara Silva',
+    cpf: '111.222.333-44',
+    birthDate: '1995-03-15',
+    gender: 'Feminino',
+    phone: '(98) 98888-1111',
+    notes: 'Fadiga ocular frequente após trabalhar no computador.',
+    shopId: 'loja-1'
+  }),
+  createDemoPatient({
+    id: 'pat-5',
+    name: 'Roberto Carlos Souza',
+    cpf: '222.333.444-55',
+    birthDate: '1970-07-20',
+    gender: 'Masculino',
+    phone: '(98) 98777-2222',
+    notes: 'Acompanhamento de presbiopia e histórico familiar de glaucoma.',
+    shopId: 'loja-1',
+    alerts: [{ id: 'a-demo-5', type: 'administrative', text: 'Pagamento pendente', color: '#ef4444' }]
+  }),
+  createDemoPatient({
+    id: 'pat-6',
+    name: 'Francisca Ferreira Melo',
+    cpf: '555.666.777-88',
+    birthDate: '1962-10-18',
+    gender: 'Feminino',
+    phone: '(98) 98444-5555',
+    notes: 'Histórico familiar de glaucoma severo.',
+    shopId: 'loja-2',
+    alerts: [{ id: 'a-demo-6', type: 'clinical', text: 'Retorno prioritário', color: '#ef4444' }]
+  }),
+  createDemoPatient({
+    id: 'pat-7',
+    name: 'Antônio Marcos Barbosa',
+    cpf: '666.777.888-99',
+    birthDate: '1990-04-25',
+    gender: 'Masculino',
+    phone: '(98) 98333-6666',
+    notes: 'Cirurgia refrativa realizada em 2024.',
+    shopId: 'loja-1'
+  }),
+  createDemoPatient({
+    id: 'pat-8',
+    name: 'Juliana Teixeira',
+    cpf: '777.888.999-00',
+    birthDate: '2001-09-02',
+    gender: 'Feminino',
+    phone: '(98) 98222-7777',
+    notes: 'Queixa de fotofobia no ambiente de trabalho.',
+    shopId: 'loja-2'
+  }),
+  createDemoPatient({
+    id: 'pat-9',
+    name: 'Bruno Alencar Guedes',
+    cpf: '888.999.000-11',
+    birthDate: '1984-11-30',
+    gender: 'Masculino',
+    phone: '(98) 98111-8888',
+    notes: 'Necessita lentes de alto índice de refração.',
+    shopId: 'loja-1'
+  }),
+  createDemoPatient({
+    id: 'pat-10',
+    name: 'Patrícia Albuquerque',
+    cpf: '999.000.111-22',
+    birthDate: '1979-01-14',
+    gender: 'Feminino',
+    phone: '(98) 98000-9999',
+    notes: 'Usuária de óculos multifocais há três anos.',
+    shopId: 'loja-2'
+  })
 ];
 
 // Gerar agendamentos dinâmicos ao redor da data atual para parecer ativo

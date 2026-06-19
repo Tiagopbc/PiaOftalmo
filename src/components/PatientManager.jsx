@@ -1,5 +1,8 @@
-import React, { useContext, useState } from 'react';
+import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
+import PageHeader from './PageHeader';
+import { StatusBadge } from './StatusBadge';
+import { StatePanel } from './StatePanel';
 import {
   Search,
   UserPlus,
@@ -9,29 +12,65 @@ import {
   AlertTriangle,
   Clock,
   Plus,
-  Trash2,
+  UserX,
+  RotateCcw,
   Paperclip,
-  Check,
-  Eye,
   Calendar,
   Printer,
   FlaskConical
 } from 'lucide-react';
 
+const getPatientAge = (birthDate) => {
+  if (!birthDate) return null;
+  const birth = new Date(`${birthDate}T12:00:00`);
+  if (Number.isNaN(birth.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const hasNotHadBirthday =
+    today.getMonth() < birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+
+  if (hasNotHadBirthday) age -= 1;
+  return age;
+};
+
+const getLastPatientEvent = (patient) => {
+  const events = patient?.timeline || [];
+  if (events.length === 0) return null;
+
+  return events.reduce((latest, event) => {
+    if (!latest) return event;
+    return String(event.date || '') > String(latest.date || '') ? event : latest;
+  }, null);
+};
+
+const formatPatientDate = (date) => {
+  if (!date) return 'Data não informada';
+  const parsed = new Date(`${date}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? 'Data não informada' : parsed.toLocaleDateString('pt-BR');
+};
+
 const PatientManager = () => {
   const {
+    currentUser,
     patients,
     selectedPatientId,
     setSelectedPatientId,
     addPatient,
     updatePatient,
-    deletePatient,
+    setPatientActiveStatus,
     addPrescription,
     addPurchase,
     updatePurchaseStatus,
     professionals,
-    setActivePrintData
+    setActivePrintData,
+    dataStatus
   } = useContext(AppContext);
+
+  const canManagePatientStatus = currentUser?.isDemo
+    ? currentUser.role === 'admin'
+    : currentUser?.appRole === 'admin';
 
   const triggerPrintRx = (rx) => {
     setActivePrintData({
@@ -71,6 +110,7 @@ const PatientManager = () => {
   };
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [patientStatusFilter, setPatientStatusFilter] = useState('active');
   const [showAddForm, setShowAddForm] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState('timeline'); // timeline, rx, purchases, docs
 
@@ -130,24 +170,40 @@ const PatientManager = () => {
   const [attachmentName, setAttachmentName] = useState('');
 
   // Filtrar pacientes
+  const activePatientCount = patients.filter((patient) => patient.isActive !== false).length;
+  const inactivePatientCount = patients.length - activePatientCount;
+
   const filteredPatients = patients.filter((p) => {
     const term = searchTerm.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(term) ||
-      p.cpf.includes(term) ||
-      p.rg.includes(term)
+    const matchesSearch = (
+      (p.name || '').toLowerCase().includes(term) ||
+      (p.cpf || '').toLowerCase().includes(term) ||
+      (p.rg || '').toLowerCase().includes(term)
     );
+    const isActive = p.isActive !== false;
+    const matchesStatus = patientStatusFilter === 'all'
+      || (patientStatusFilter === 'active' && isActive)
+      || (patientStatusFilter === 'inactive' && !isActive);
+
+    return matchesSearch && matchesStatus;
   });
 
-  const selectedPatient = patients.find((p) => p.id === selectedPatientId) || null;
+  const selectedPatientFromAll = patients.find((p) => p.id === selectedPatientId) || null;
+  const selectedPatient =
+    filteredPatients.find((p) => p.id === selectedPatientId) ||
+    filteredPatients[0] ||
+    selectedPatientFromAll ||
+    null;
+  const selectedPatientAge = getPatientAge(selectedPatient?.birthDate);
+  const selectedLastEvent = getLastPatientEvent(selectedPatient);
 
-  const handleCreatePatient = (e) => {
+  const handleCreatePatient = async (e) => {
     e.preventDefault();
     if (!newPatient.name || !newPatient.birthDate) {
       alert('Nome e Data de Nascimento são obrigatórios!');
       return;
     }
-    const created = addPatient(newPatient);
+    const created = await addPatient(newPatient);
     setSelectedPatientId(created.id);
     setShowAddForm(false);
     // Reset form
@@ -275,85 +331,189 @@ const PatientManager = () => {
     setAttachmentName('');
   };
 
-  const handleDeletePatientClick = (id) => {
-    if (confirm('Tem certeza que deseja excluir este paciente? Esta ação não pode ser desfeita.')) {
-      deletePatient(id);
-      setSelectedPatientId(null);
+  const handlePatientStatusChange = async (patient, nextIsActive) => {
+    if (!canManagePatientStatus) {
+      alert('Apenas administradores podem inativar ou reativar pacientes.');
+      return;
+    }
+
+    const action = nextIsActive ? 'reativar' : 'inativar';
+    const message = nextIsActive
+      ? `Deseja reativar ${patient.name}? O cadastro voltará a aceitar novos atendimentos.`
+      : `Deseja inativar ${patient.name}? O histórico será preservado e poderá ser reativado depois.`;
+
+    if (confirm(message)) {
+      const result = await setPatientActiveStatus(patient.id, nextIsActive);
+
+      if (result?.success) {
+        setSelectedPatientId(null);
+      } else {
+        alert(result?.error || `Não foi possível ${action} o paciente.`);
+      }
     }
   };
 
+  const handleStatusFilterChange = (status) => {
+    setPatientStatusFilter(status);
+    setSelectedPatientId(null);
+    setShowAddForm(false);
+  };
+
   return (
-    <div className="section-grid">
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Clínica"
+        title="Pacientes"
+        description="Consulte prontuários, acompanhe históricos e gerencie pacientes ativos e inativos."
+        meta={`${activePatientCount} ativos · ${inactivePatientCount} inativos`}
+        actions={(
+          <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
+            <UserPlus size={17} /> Novo paciente
+          </button>
+        )}
+      />
+
+      <div className="patient-workspace">
       {/* Coluna Esquerda: Lista de Pacientes e Busca */}
-      <div>
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '18px' }}>Cadastro de Pacientes</h3>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddForm(true)}>
-              <UserPlus size={16} /> Novo Paciente
-            </button>
+      <aside className="patient-list-pane">
+        <div className="card patient-list-card">
+          <div className="patient-list-toolbar">
+            <div>
+              <span className="patient-eyebrow">Pacientes</span>
+              <h2>Prontuários</h2>
+            </div>
           </div>
 
-          <div style={{ position: 'relative', marginBottom: '16px' }}>
+          <div className="patient-search-box">
             <input
               type="text"
               className="form-control"
-              placeholder="Buscar por Nome, CPF ou RG..."
+              placeholder="Buscar nome, CPF ou RG"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '38px' }}
             />
-            <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
+            <Search size={17} />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '450px', overflowY: 'auto' }}>
-            {filteredPatients.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)' }}>
-                Nenhum paciente encontrado.
-              </div>
+          <div className="patient-status-tabs" aria-label="Filtrar pacientes por status">
+            <button
+              type="button"
+              className={patientStatusFilter === 'active' ? 'active' : ''}
+              onClick={() => handleStatusFilterChange('active')}
+              aria-pressed={patientStatusFilter === 'active'}
+            >
+              Ativos <span>{activePatientCount}</span>
+            </button>
+            <button
+              type="button"
+              className={patientStatusFilter === 'inactive' ? 'active' : ''}
+              onClick={() => handleStatusFilterChange('inactive')}
+              aria-pressed={patientStatusFilter === 'inactive'}
+            >
+              Inativos <span>{inactivePatientCount}</span>
+            </button>
+            <button
+              type="button"
+              className={patientStatusFilter === 'all' ? 'active' : ''}
+              onClick={() => handleStatusFilterChange('all')}
+              aria-pressed={patientStatusFilter === 'all'}
+            >
+              Todos <span>{patients.length}</span>
+            </button>
+          </div>
+
+          <div className="patient-list-summary">
+            <span>
+              {dataStatus?.loading
+                ? 'Sincronizando dados…'
+                : `${filteredPatients.length} ${filteredPatients.length === 1 ? 'resultado' : 'resultados'}`}
+            </span>
+            {searchTerm && <button type="button" onClick={() => setSearchTerm('')}>Limpar busca</button>}
+          </div>
+
+          <div className="patient-list-scroll">
+            {dataStatus?.error && (
+              <StatePanel
+                type="error"
+                title="Falha na sincronização"
+                description={dataStatus.error}
+                compact
+              />
+            )}
+            {dataStatus?.loading ? (
+              <StatePanel
+                type="loading"
+                title="Carregando pacientes"
+                description="Sincronizando os cadastros desta filial."
+                compact
+              />
+            ) : filteredPatients.length === 0 ? (
+              <StatePanel
+                type={searchTerm ? 'search' : 'empty'}
+                title={searchTerm
+                  ? 'Nenhum paciente corresponde à busca'
+                  : patientStatusFilter === 'inactive'
+                    ? 'Nenhum paciente inativo'
+                    : 'Nenhum paciente cadastrado'}
+                description={searchTerm
+                  ? 'Confira o nome, CPF ou RG informado.'
+                  : 'Use o botão “Novo paciente” para iniciar um cadastro.'}
+                action={searchTerm ? (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSearchTerm('')}>
+                    Limpar busca
+                  </button>
+                ) : null}
+                compact
+              />
             ) : (
-              filteredPatients.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => {
-                    setSelectedPatientId(p.id);
-                    setShowAddForm(false);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 16px',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    backgroundColor: selectedPatientId === p.id ? 'var(--primary-light)' : '#fff',
-                    borderColor: selectedPatientId === p.id ? 'var(--primary)' : 'var(--border-color)',
-                    transition: 'var(--transition-fast)'
-                  }}
-                >
-                  <div>
-                    <h4 style={{ fontSize: '15px', color: selectedPatientId === p.id ? 'var(--primary)' : 'var(--bg-dark)' }}>
-                      {p.name} {p.isMinor && <span style={{ fontSize: '10px', backgroundColor: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>MENOR</span>}
-                    </h4>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      CPF: {p.cpf || 'Não cadastrado'} | Fone: {p.phone}
+              filteredPatients.map((patient) => {
+                const age = getPatientAge(patient.birthDate);
+                const lastEvent = getLastPatientEvent(patient);
+                const isSelected = selectedPatient?.id === patient.id && !showAddForm;
+
+                return (
+                  <button
+                    type="button"
+                    key={patient.id}
+                    className={`patient-list-item ${isSelected ? 'active' : ''} ${patient.isActive === false ? 'inactive' : ''}`}
+                    onClick={() => {
+                      setSelectedPatientId(patient.id);
+                      setShowAddForm(false);
+                    }}
+                  >
+                    <span className="patient-list-copy">
+                      <span className="patient-list-name-row">
+                        <strong>{patient.name}</strong>
+                        {patient.isMinor && <span className="patient-minor-badge">Menor</span>}
+                        {patient.isActive === false && <span className="patient-inactive-badge">Inativo</span>}
+                      </span>
+                      <span className="patient-list-meta">
+                        {age !== null ? `${age} anos` : 'Idade não informada'}
+                        <span aria-hidden="true">•</span>
+                        {patient.phone || 'Sem telefone'}
+                      </span>
+                      <span className="patient-list-last-event">
+                        <Clock size={12} />
+                        {lastEvent
+                          ? `${lastEvent.title} · ${formatPatientDate(lastEvent.date)}`
+                          : 'Sem atendimentos registrados'}
+                      </span>
                     </span>
-                  </div>
-                  {p.alerts && p.alerts.length > 0 && (
-                    <span className="badge-alert" title="Alertas Ativos">
-                      <AlertTriangle size={12} /> {p.alerts.length}
-                    </span>
-                  )}
-                </div>
-              ))
+                    {patient.alerts && patient.alerts.length > 0 && (
+                      <span className="patient-list-alert" title={`${patient.alerts.length} alerta(s) ativo(s)`}>
+                        <AlertTriangle size={13} /> {patient.alerts.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
         </div>
-      </div>
+      </aside>
 
       {/* Coluna Direita: Detalhes ou Formulário de Cadastro */}
-      <div>
+      <section className="patient-detail-pane">
         {showAddForm ? (
           /* Formulário de Novo Paciente */
           <div className="card">
@@ -482,7 +642,7 @@ const PatientManager = () => {
               </div>
 
               {newPatient.isMinor && (
-                <div style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', marginBottom: '16px' }}>
                   <h4 style={{ fontSize: '14px', marginBottom: '12px' }}>Dados do Responsável Legal</h4>
                   <div className="form-group">
                     <label>Nome do Responsável*</label>
@@ -549,48 +709,67 @@ const PatientManager = () => {
         ) : selectedPatient ? (
           /* Visualização de Detalhes do Paciente */
           <div>
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                <div>
-                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <User size={24} color="var(--primary)" />
-                    {selectedPatient.name}
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-                    ID do Paciente: {selectedPatient.id} | Sexo: {selectedPatient.gender}
+            <div className="card patient-detail-card">
+              <div className="patient-detail-header">
+                <div className="patient-detail-identity">
+                  <span className="patient-eyebrow">Prontuário do paciente</span>
+                  <h2>{selectedPatient.name}</h2>
+                  <div className="patient-detail-tags">
+                    {selectedPatientAge !== null && <span>{selectedPatientAge} anos</span>}
+                    {selectedPatient.gender && <span>{selectedPatient.gender}</span>}
+                    {selectedPatient.isMinor && <StatusBadge status="encaixe" label="Menor de idade" />}
+                    {selectedPatient.isActive === false && <StatusBadge status="inativo" label="Paciente inativo" />}
+                  </div>
+                  <p>
+                    {selectedLastEvent
+                      ? `Último registro: ${selectedLastEvent.title} em ${formatPatientDate(selectedLastEvent.date)}`
+                      : 'Ainda não há atendimentos registrados neste prontuário.'}
                   </p>
                 </div>
-                <button
-                  onClick={() => handleDeletePatientClick(selectedPatient.id)}
-                  className="btn btn-danger btn-sm"
-                  style={{ padding: '6px' }}
-                  title="Excluir Ficha"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {canManagePatientStatus && (
+                  <button
+                    onClick={() => handlePatientStatusChange(selectedPatient, selectedPatient.isActive === false)}
+                    className={`patient-status-button ${selectedPatient.isActive === false ? 'reactivate' : 'deactivate'}`}
+                    title={selectedPatient.isActive === false ? 'Reativar Paciente' : 'Inativar Paciente'}
+                    aria-label={`${selectedPatient.isActive === false ? 'Reativar' : 'Inativar'} ${selectedPatient.name}`}
+                    data-testid="patient-status-button"
+                  >
+                    {selectedPatient.isActive === false ? <RotateCcw size={15} /> : <UserX size={15} />}
+                    <span>{selectedPatient.isActive === false ? 'Reativar' : 'Inativar'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Grid de Informações Cadastrais */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '12px',
-                  fontSize: '13px',
-                  backgroundColor: '#f8fafc',
-                  padding: '16px',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: '20px',
-                  border: '1px solid var(--border-color)'
-                }}
-              >
-                <div><strong>Nascimento:</strong> {new Date(selectedPatient.birthDate).toLocaleDateString('pt-BR')}</div>
-                <div><strong>CPF:</strong> {selectedPatient.cpf || '-'}</div>
-                <div><strong>RG:</strong> {selectedPatient.rg || '-'}</div>
-                <div><strong>Telefone:</strong> {selectedPatient.phone || '-'}</div>
-                <div><strong>WhatsApp:</strong> {selectedPatient.whatsapp || '-'}</div>
-                <div style={{ gridColumn: 'span 2' }}><strong>E-mail:</strong> {selectedPatient.email || '-'}</div>
-                <div style={{ gridColumn: 'span 2' }}><strong>Endereço:</strong> {selectedPatient.address || '-'}</div>
+              <div className="patient-info-grid">
+                <div className="patient-info-item">
+                  <span><Calendar size={13} /> Nascimento</span>
+                  <strong>{formatPatientDate(selectedPatient.birthDate)}</strong>
+                </div>
+                <div className="patient-info-item">
+                  <span>CPF</span>
+                  <strong>{selectedPatient.cpf || 'Não informado'}</strong>
+                </div>
+                <div className="patient-info-item">
+                  <span>RG</span>
+                  <strong>{selectedPatient.rg || 'Não informado'}</strong>
+                </div>
+                <div className="patient-info-item">
+                  <span><Phone size={13} /> Telefone</span>
+                  <strong>{selectedPatient.phone || 'Não informado'}</strong>
+                </div>
+                <div className="patient-info-item">
+                  <span>WhatsApp</span>
+                  <strong>{selectedPatient.whatsapp || 'Não informado'}</strong>
+                </div>
+                <div className="patient-info-item">
+                  <span>E-mail</span>
+                  <strong>{selectedPatient.email || 'Não informado'}</strong>
+                </div>
+                <div className="patient-info-item patient-info-wide">
+                  <span>Endereço</span>
+                  <strong>{selectedPatient.address || 'Não informado'}</strong>
+                </div>
               </div>
 
               {/* Informações do Responsável (se houver) */}
@@ -619,9 +798,9 @@ const PatientManager = () => {
                       <span
                         key={a.id}
                         style={{
-                          backgroundColor: a.type === 'clinical' ? '#fee2e2' : '#fef3c7',
-                          color: a.type === 'clinical' ? '#ef4444' : '#d97706',
-                          border: `1px solid ${a.type === 'clinical' ? '#fecaca' : '#fde68a'}`,
+                          backgroundColor: a.type === 'clinical' ? 'var(--status-cancelado)' : 'var(--status-falta)',
+                          color: a.type === 'clinical' ? 'var(--status-cancelado-text)' : 'var(--status-falta-text)',
+                          border: `1px solid var(--border-color)`,
                           padding: '4px 10px',
                           borderRadius: 'var(--radius-full)',
                           fontSize: '12px',
@@ -633,7 +812,9 @@ const PatientManager = () => {
                         <AlertTriangle size={12} />
                         {a.text}
                         <button
+                          type="button"
                           onClick={() => handleRemoveAlert(a.id)}
+                          aria-label={`Remover alerta: ${a.text}`}
                           style={{ border: 'none', background: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 'bold' }}
                         >
                           ×
@@ -641,7 +822,12 @@ const PatientManager = () => {
                       </span>
                     ))
                   ) : (
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nenhum alerta para este paciente.</span>
+                    <StatePanel
+                      type="empty"
+                      title="Nenhum alerta neste prontuário"
+                      description="Alertas clínicos ou administrativos aparecerão aqui."
+                      compact
+                    />
                   )}
                 </div>
 
@@ -651,6 +837,7 @@ const PatientManager = () => {
                     style={{ width: '120px', padding: '6px' }}
                     value={alertType}
                     onChange={(e) => setAlertType(e.target.value)}
+                    aria-label="Tipo de alerta"
                   >
                     <option value="clinical">Clínico</option>
                     <option value="administrative">Adm</option>
@@ -662,25 +849,26 @@ const PatientManager = () => {
                     placeholder="Adicionar aviso rápido..."
                     value={alertText}
                     onChange={(e) => setAlertText(e.target.value)}
+                    aria-label="Texto do novo alerta"
                   />
-                  <button type="submit" className="btn btn-secondary btn-sm" style={{ padding: '8px 12px' }}>
+                  <button type="submit" className="btn btn-secondary btn-sm" style={{ padding: '8px 12px' }} aria-label="Adicionar alerta ao prontuário">
                     <Plus size={16} />
                   </button>
                 </form>
               </div>
 
               {/* Sub-Navegação interna (Abas do Prontuário) */}
-              <div className="tab-container" style={{ marginBottom: '16px' }}>
-                <button className={`tab-btn ${activeSubTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveSubTab('timeline')}>
+              <div className="tab-container" style={{ marginBottom: '16px' }} role="group" aria-label="Seções do prontuário">
+                <button type="button" aria-pressed={activeSubTab === 'timeline'} className={`tab-btn ${activeSubTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveSubTab('timeline')}>
                   Linha do Tempo
                 </button>
-                <button className={`tab-btn ${activeSubTab === 'rx' ? 'active' : ''}`} onClick={() => setActiveSubTab('rx')}>
+                <button type="button" aria-pressed={activeSubTab === 'rx'} className={`tab-btn ${activeSubTab === 'rx' ? 'active' : ''}`} onClick={() => setActiveSubTab('rx')}>
                   Receitas ({selectedPatient.prescriptions?.length || 0})
                 </button>
-                <button className={`tab-btn ${activeSubTab === 'purchases' ? 'active' : ''}`} onClick={() => setActiveSubTab('purchases')}>
+                <button type="button" aria-pressed={activeSubTab === 'purchases'} className={`tab-btn ${activeSubTab === 'purchases' ? 'active' : ''}`} onClick={() => setActiveSubTab('purchases')}>
                   Compras / OS ({selectedPatient.purchases?.length || 0})
                 </button>
-                <button className={`tab-btn ${activeSubTab === 'docs' ? 'active' : ''}`} onClick={() => setActiveSubTab('docs')}>
+                <button type="button" aria-pressed={activeSubTab === 'docs'} className={`tab-btn ${activeSubTab === 'docs' ? 'active' : ''}`} onClick={() => setActiveSubTab('docs')}>
                   Documentos ({selectedPatient.attachments?.length || 0})
                 </button>
               </div>
@@ -697,7 +885,7 @@ const PatientManager = () => {
                           <div className="timeline-content">
                             <div className="timeline-header">
                               <span className="timeline-title">{node.title}</span>
-                              <span className="timeline-date">{new Date(node.date).toLocaleDateString('pt-BR')}</span>
+                              <span className="timeline-date">{formatPatientDate(node.date)}</span>
                             </div>
                             <p className="timeline-desc">{node.desc}</p>
                           </div>
@@ -720,7 +908,7 @@ const PatientManager = () => {
                   </div>
 
                   {showRxForm && (
-                    <form onSubmit={handleAddRx} style={{ border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', backgroundColor: '#f8fafc' }}>
+                    <form onSubmit={handleAddRx} style={{ border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', backgroundColor: 'var(--bg-primary)' }}>
                       <div className="form-group">
                         <label>Profissional Emissor*</label>
                         <select
@@ -820,11 +1008,11 @@ const PatientManager = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0 ? (
                       selectedPatient.prescriptions.map((rx) => (
-                        <div key={rx.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: '#fff' }}>
+                        <div key={rx.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', alignItems: 'center' }}>
                             <strong>Dr(a). {rx.doctor}</strong>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>{new Date(rx.date).toLocaleDateString('pt-BR')}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>{formatPatientDate(rx.date)}</span>
                               <button
                                 type="button"
                                 className="btn btn-secondary btn-sm"
@@ -840,7 +1028,7 @@ const PatientManager = () => {
                           <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>LONGE</div>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
                             <thead>
-                              <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#f8fafc' }}>
+                              <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
                                 <th style={{ padding: '4px' }}>Olho</th>
                                 <th style={{ padding: '4px' }}>Esférico</th>
                                 <th style={{ padding: '4px' }}>Cilíndrico</th>
@@ -875,7 +1063,7 @@ const PatientManager = () => {
                               <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>PERTO</div>
                               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
                                 <thead>
-                                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#f8fafc' }}>
+                                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
                                     <th style={{ padding: '4px' }}>Olho</th>
                                     <th style={{ padding: '4px' }}>Esférico</th>
                                     <th style={{ padding: '4px' }}>Cilíndrico</th>
@@ -927,7 +1115,12 @@ const PatientManager = () => {
                         </div>
                       ))
                     ) : (
-                      <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Nenhuma receita emitida anteriormente.</p>
+                      <StatePanel
+                        type="empty"
+                        title="Nenhuma receita emitida"
+                        description="As prescrições do paciente aparecerão aqui."
+                        compact
+                      />
                     )}
                   </div>
                 </div>
@@ -943,7 +1136,7 @@ const PatientManager = () => {
                   </div>
 
                   {showPurchaseForm && (
-                    <form onSubmit={handleAddPurchase} style={{ border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', backgroundColor: '#f8fafc' }}>
+                    <form onSubmit={handleAddPurchase} style={{ border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', backgroundColor: 'var(--bg-primary)' }}>
                       <div className="form-group">
                         <label>Nº da Ordem de Serviço (Deixe em branco para autogerar)</label>
                         <input type="text" placeholder="Ex: OS-1045" className="form-control" value={newPurchase.osNumber} onChange={(e) => setNewPurchase({ ...newPurchase, osNumber: e.target.value })} />
@@ -965,26 +1158,25 @@ const PatientManager = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {selectedPatient.purchases && selectedPatient.purchases.length > 0 ? (
                       selectedPatient.purchases.map((pur) => (
-                        <div key={pur.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={pur.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <strong style={{ fontSize: '14px' }}>{pur.osNumber}</strong>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(pur.date).toLocaleDateString('pt-BR')}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatPatientDate(pur.date)}</span>
                             </div>
                             <p style={{ fontSize: '13px', margin: '4px 0' }}>{pur.item}</p>
-                            <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--bg-dark)' }}>R$ {parseFloat(pur.value).toFixed(2)}</span>
+                            <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-title)' }}>R$ {parseFloat(pur.value).toFixed(2)}</span>
                           </div>
 
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold', backgroundColor: '#e2e8f0', color: '#475569' }}>
-                              {pur.status}
-                            </span>
+                            <StatusBadge status={pur.status} />
                             <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                               <select
                                 value={pur.status}
                                 onChange={(e) => updatePurchaseStatus(selectedPatient.id, pur.id, e.target.value)}
                                 className="form-control"
                                 style={{ width: '130px', fontSize: '11px', padding: '4px' }}
+                                aria-label={`Alterar status da OS ${pur.osNumber}`}
                               >
                                 <option>Aguardando Laboratório</option>
                                 <option>Em Produção</option>
@@ -999,6 +1191,7 @@ const PatientManager = () => {
                                 className="btn btn-secondary btn-sm"
                                 style={{ padding: '4px 6px', height: 'auto' }}
                                 title="Via do Cliente"
+                                aria-label={`Imprimir via do cliente da OS ${pur.osNumber}`}
                               >
                                 <Printer size={12} />
                               </button>
@@ -1008,6 +1201,7 @@ const PatientManager = () => {
                                 className="btn btn-secondary btn-sm"
                                 style={{ padding: '4px 6px', height: 'auto' }}
                                 title="Via do Laboratório"
+                                aria-label={`Imprimir via do laboratório da OS ${pur.osNumber}`}
                               >
                                 <FlaskConical size={12} />
                               </button>
@@ -1016,7 +1210,12 @@ const PatientManager = () => {
                         </div>
                       ))
                     ) : (
-                      <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Nenhuma compra registrada.</p>
+                      <StatePanel
+                        type="empty"
+                        title="Nenhuma compra registrada"
+                        description="Ordens de serviço e vendas aparecerão aqui."
+                        compact
+                      />
                     )}
                   </div>
                 </div>
@@ -1042,7 +1241,7 @@ const PatientManager = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {selectedPatient.attachments && selectedPatient.attachments.length > 0 ? (
                       selectedPatient.attachments.map((doc) => (
-                        <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#fff', fontSize: '13px' }}>
+                        <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)', fontSize: '13px' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <FileText size={16} color="var(--primary)" />
                             <strong>{doc.name}</strong>
@@ -1053,7 +1252,12 @@ const PatientManager = () => {
                         </div>
                       ))
                     ) : (
-                      <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Nenhum laudo ou exame anexado.</p>
+                      <StatePanel
+                        type="empty"
+                        title="Nenhum documento anexado"
+                        description="Laudos e exames adicionados aparecerão aqui."
+                        compact
+                      />
                     )}
                   </div>
                 </div>
@@ -1062,11 +1266,15 @@ const PatientManager = () => {
           </div>
         ) : (
           /* Estado Inicial - Nenhum Paciente Selecionado */
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-muted)' }}>
-            <User size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
-            <p>Selecione um paciente na lista ou crie um novo cadastro.</p>
+          <div className="card" style={{ marginBottom: 0 }}>
+            <StatePanel
+              type="empty"
+              title="Selecione um paciente"
+              description="Escolha um cadastro na lista ou crie um novo paciente."
+            />
           </div>
         )}
+      </section>
       </div>
     </div>
   );

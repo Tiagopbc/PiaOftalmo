@@ -1,5 +1,6 @@
-import React, { createContext, useState, useEffect } from 'react';
+import { createContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
+import { getAuthUserProfile } from '../utils/authUser';
 import {
   INITIAL_PATIENTS,
   INITIAL_APPOINTMENTS,
@@ -8,56 +9,161 @@ import {
   INITIAL_ROOMS
 } from '../utils/mockData';
 
+// Mapping helpers to translate between Supabase database (snake_case) and frontend (camelCase)
+const mapPatientToCamel = (pat) => {
+  if (!pat) return null;
+  return {
+    ...pat,
+    birthDate: pat.birth_date ?? pat.birthDate,
+    isMinor: pat.is_minor ?? pat.isMinor,
+    isActive: pat.is_active ?? pat.isActive ?? true,
+  };
+};
+
+const mapPatientToSnake = (pat) => {
+  if (!pat) return null;
+  const copy = { ...pat };
+  copy.birth_date = pat.birthDate;
+  copy.is_minor = pat.isMinor;
+  copy.is_active = pat.isActive ?? true;
+  delete copy.birthDate;
+  delete copy.isMinor;
+  delete copy.isActive;
+  return copy;
+};
+
+const mapAppToCamel = (app) => {
+  if (!app) return null;
+  return {
+    ...app,
+    patientId: app.patient_id,
+    patientName: app.patient_name,
+    professionalId: app.professional_id,
+    roomId: app.room_id,
+    serviceId: app.service_id,
+    paymentType: app.payment_type,
+    isEncaixe: app.is_encaixe
+  };
+};
+
+const mapAppToSnake = (app) => {
+  if (!app) return null;
+  return {
+    id: app.id,
+    patient_id: app.patientId,
+    patient_name: app.patientName,
+    professional_id: app.professionalId,
+    room_id: app.roomId,
+    service_id: app.serviceId,
+    payment_type: app.paymentType,
+    date: app.date,
+    time: app.time,
+    duration: app.duration,
+    status: app.status,
+    notes: app.notes,
+    is_encaixe: app.isEncaixe,
+    shop_id: app.shop_id
+  };
+};
+
+const mapWaitToCamel = (wait) => {
+  if (!wait) return null;
+  return {
+    ...wait,
+    patientName: wait.patient_name,
+    preferredDoctor: wait.preferred_doctor,
+    dateAdded: wait.date_added
+  };
+};
+
+const mapWaitToSnake = (wait) => {
+  if (!wait) return null;
+  return {
+    id: wait.id,
+    patient_name: wait.patientName,
+    phone: wait.phone,
+    preferred_doctor: wait.preferredDoctor,
+    service: wait.service,
+    date_added: wait.dateAdded,
+    shop_id: wait.shop_id
+  };
+};
+
 export const AppContext = createContext();
+
+const readLocalData = (key, fallback) => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch (error) {
+    console.warn(`Dados locais inválidos em ${key}; usando dados de teste.`, error);
+    return fallback;
+  }
+};
 
 export const AppProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
 
-  const [patients, setPatients] = useState(() => {
-    const local = localStorage.getItem('pia_patients');
-    return local ? JSON.parse(local) : INITIAL_PATIENTS;
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('pia_theme') || 'light';
   });
 
-  const [appointments, setAppointments] = useState(() => {
-    const local = localStorage.getItem('pia_appointments');
-    return local ? JSON.parse(local) : INITIAL_APPOINTMENTS;
-  });
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('pia_theme', next);
+      return next;
+    });
+  };
 
-  const [waitlist, setWaitlist] = useState(() => {
-    const local = localStorage.getItem('pia_waitlist');
-    return local ? JSON.parse(local) : INITIAL_WAITLIST;
-  });
+  // Sync theme with DOM attribute
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+
+  const [patients, setPatients] = useState(() => readLocalData('pia_demo_patients_v2', INITIAL_PATIENTS));
+  const [appointments, setAppointments] = useState(() => readLocalData('pia_demo_appointments_v2', INITIAL_APPOINTMENTS));
+  const [waitlist, setWaitlist] = useState(() => readLocalData('pia_demo_waitlist_v2', INITIAL_WAITLIST));
+  const [dataStatus, setDataStatus] = useState({ loading: false, error: '', source: 'local' });
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [activePrintData, setActivePrintData] = useState(null);
+  const isRemoteSession = isSupabaseConfigured && Boolean(currentUser) && !currentUser?.isDemo;
 
   // 1. Ouvir Sessão do Supabase (se configurado)
   useEffect(() => {
     if (isSupabaseConfigured) {
+      const ensureUserMetadata = async (user) => {
+        const name = user.user_metadata?.name || user.email.split('@')[0];
+
+        if (!user.user_metadata?.name) {
+          try {
+            await supabase.auth.updateUser({
+              data: { ...user.user_metadata, name }
+            });
+          } catch (err) {
+            console.error('Erro ao inicializar o nome do usuário:', err);
+          }
+        }
+      };
+
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           const user = session.user;
-          setCurrentUser({
-            id: user.id,
-            email: user.email,
-            name: user.user_metadata?.name || user.email.split('@')[0],
-            role: user.user_metadata?.role || 'admin',
-            shopId: user.user_metadata?.shop_id || 'loja-1'
-          });
+          ensureUserMetadata(user);
+          setCurrentUser(getAuthUserProfile(user));
         }
       });
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (session) {
           const user = session.user;
-          setCurrentUser({
-            id: user.id,
-            email: user.email,
-            name: user.user_metadata?.name || user.email.split('@')[0],
-            role: user.user_metadata?.role || 'admin',
-            shopId: user.user_metadata?.shop_id || 'loja-1'
-          });
+          if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+            ensureUserMetadata(user);
+          }
+          setCurrentUser(getAuthUserProfile(user));
         } else {
           setCurrentUser(null);
         }
@@ -67,42 +173,73 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
-  // 2. Carregar dados do Supabase ou persistir localmente
+  // 2. Carregar dados do Supabase apenas em sessões reais.
+  // No modo local, os dados de teste ficam isolados no navegador.
   useEffect(() => {
     const loadData = async () => {
-      if (isSupabaseConfigured && currentUser) {
-        try {
-          // Buscar pacientes
-          const { data: pats, error: errPats } = await supabase.from('patients').select('*');
-          if (!errPats && pats) setPatients(pats);
+      if (!currentUser) return;
 
-          // Buscar consultas
-          const { data: apps, error: errApps } = await supabase.from('appointments').select('*');
-          if (!errApps && apps) setAppointments(apps);
+      if (currentUser.isDemo || !isSupabaseConfigured) {
+        setDataStatus({ loading: false, error: '', source: 'local' });
+        return;
+      }
 
-          // Buscar fila de espera
-          const { data: waits, error: errWaits } = await supabase.from('waitlist').select('*');
-          if (!errWaits && waits) setWaitlist(waits);
-        } catch (e) {
-          console.warn('Erro ao conectar tabelas do Supabase, rodando localmente:', e);
+      setDataStatus({ loading: true, error: '', source: 'supabase' });
+
+      try {
+        const [patientsResult, appointmentsResult, waitlistResult] = await Promise.all([
+          supabase.from('patients').select('*').order('name', { ascending: true }),
+          supabase.from('appointments').select('*'),
+          supabase.from('waitlist').select('*')
+        ]);
+
+        const errors = [patientsResult.error, appointmentsResult.error, waitlistResult.error].filter(Boolean);
+
+        if (!patientsResult.error) setPatients((patientsResult.data || []).map(mapPatientToCamel));
+        if (!appointmentsResult.error) setAppointments((appointmentsResult.data || []).map(mapAppToCamel));
+        if (!waitlistResult.error) setWaitlist((waitlistResult.data || []).map(mapWaitToCamel));
+
+        if (errors.length > 0) {
+          errors.forEach((error) => console.error('Erro ao carregar dados do Supabase:', error));
+          setDataStatus({
+            loading: false,
+            error: 'Não foi possível ler todos os dados do Supabase. Verifique as políticas de acesso (RLS).',
+            source: 'supabase'
+          });
+        } else {
+          setDataStatus({ loading: false, error: '', source: 'supabase' });
         }
+      } catch (error) {
+        console.error('Erro ao carregar dados do Supabase:', error);
+        setDataStatus({
+          loading: false,
+          error: 'Falha de conexão com o Supabase. Você ainda pode testar pelo acesso local.',
+          source: 'supabase'
+        });
       }
     };
     loadData();
   }, [currentUser]);
 
-  // Persistir no LocalStorage caso esteja no modo demo
   useEffect(() => {
-    localStorage.setItem('pia_patients', JSON.stringify(patients));
-  }, [patients]);
+    if (currentUser?.isDemo || !isSupabaseConfigured) {
+      localStorage.setItem('pia_demo_patients_v2', JSON.stringify(patients));
+    }
+  }, [patients, currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('pia_appointments', JSON.stringify(appointments));
-  }, [appointments]);
+    if (currentUser?.isDemo || !isSupabaseConfigured) {
+      localStorage.setItem('pia_demo_appointments_v2', JSON.stringify(appointments));
+    }
+  }, [appointments, currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('pia_waitlist', JSON.stringify(waitlist));
-  }, [waitlist]);
+    if (currentUser?.isDemo || !isSupabaseConfigured) {
+      localStorage.setItem('pia_demo_waitlist_v2', JSON.stringify(waitlist));
+    }
+  }, [waitlist, currentUser]);
+
+
 
   // Auxiliares de Pacientes
   const addPatient = async (patient) => {
@@ -123,13 +260,14 @@ export const AppProvider = ({ children }) => {
       purchases: [],
       exams: [],
       attachments: [],
-      shop_id: currentUser?.shopId || 'loja-1'
+      isActive: true,
+      shop_id: !currentUser?.shopId || currentUser?.shopId === 'all' ? 'loja-1' : currentUser.shopId
     };
 
     setPatients((prev) => [newPatient, ...prev]);
 
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.from('patients').insert(newPatient);
+    if (isRemoteSession) {
+      const { error } = await supabase.from('patients').insert(mapPatientToSnake(newPatient));
       if (error) console.error('Erro ao salvar paciente no Supabase:', error);
     }
 
@@ -141,39 +279,87 @@ export const AppProvider = ({ children }) => {
       prev.map((p) => (p.id === updatedPatient.id ? updatedPatient : p))
     );
 
-    if (isSupabaseConfigured) {
+    if (isRemoteSession) {
       const { error } = await supabase
         .from('patients')
-        .update(updatedPatient)
+        .update(mapPatientToSnake(updatedPatient))
         .eq('id', updatedPatient.id);
       if (error) console.error('Erro ao atualizar paciente no Supabase:', error);
     }
   };
 
-  const deletePatient = async (id) => {
-    setPatients((prev) => prev.filter((p) => p.id !== id));
-    setAppointments((prev) => prev.filter((app) => app.patientId !== id));
+  const setPatientActiveStatus = async (id, isActive) => {
+    const canManagePatientStatus = currentUser?.isDemo
+      ? currentUser.role === 'admin'
+      : currentUser?.appRole === 'admin';
 
-    if (isSupabaseConfigured) {
-      await supabase.from('patients').delete().eq('id', id);
-      await supabase.from('appointments').delete().eq('patientId', id);
+    if (!canManagePatientStatus) {
+      console.warn('Alteração de status bloqueada: apenas administradores podem inativar ou reativar pacientes.');
+      return {
+        success: false,
+        error: 'Apenas administradores podem inativar ou reativar pacientes.'
+      };
     }
+
+    const patient = patients.find((item) => item.id === id);
+    if (!patient) {
+      return { success: false, error: 'Paciente não encontrado.' };
+    }
+
+    const statusEvent = {
+      id: `t-status-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      type: 'system',
+      title: isActive ? 'Paciente Reativado' : 'Paciente Inativado',
+      desc: isActive
+        ? 'O cadastro voltou a ficar disponível para novos atendimentos.'
+        : 'O cadastro foi preservado, mas ficou indisponível para novos atendimentos.'
+    };
+
+    const updatedPatient = {
+      ...patient,
+      isActive,
+      timeline: [statusEvent, ...(patient.timeline || [])]
+    };
+
+    if (isRemoteSession) {
+      const { error } = await supabase
+        .from('patients')
+        .update({ is_active: isActive, timeline: updatedPatient.timeline })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao alterar status do paciente no Supabase:', error);
+        return {
+          success: false,
+          error: 'O Supabase recusou a alteração. Execute a migração do campo is_active e verifique as permissões.'
+        };
+      }
+    }
+
+    setPatients((prev) => prev.map((item) => item.id === id ? updatedPatient : item));
+    return { success: true, patient: updatedPatient };
   };
 
   // Auxiliares de Agenda
   const addAppointment = async (app) => {
+    const patient = patients.find((item) => item.id === app.patientId);
+    if (patient?.isActive === false) {
+      console.warn('Agendamento bloqueado: o paciente está inativo.');
+      return { success: false, error: 'Reative o paciente antes de criar um novo agendamento.' };
+    }
+
     const newId = `app-${Date.now()}`;
     const newApp = {
       ...app,
       id: newId,
       status: 'confirmado',
-      shop_id: currentUser?.shopId || 'loja-1'
+      shop_id: !currentUser?.shopId || currentUser?.shopId === 'all' ? 'loja-1' : currentUser.shopId
     };
     
     setAppointments((prev) => [...prev, newApp]);
 
     // Timeline do paciente
-    const patient = patients.find((p) => p.id === app.patientId);
     if (patient) {
       const serviceName = app.serviceName || 'Consulta / Exame';
       const updatedPatient = {
@@ -192,8 +378,8 @@ export const AppProvider = ({ children }) => {
       updatePatient(updatedPatient);
     }
 
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.from('appointments').insert(newApp);
+    if (isRemoteSession) {
+      const { error } = await supabase.from('appointments').insert(mapAppToSnake(newApp));
       if (error) console.error('Erro ao salvar agendamento no Supabase:', error);
     }
 
@@ -212,10 +398,10 @@ export const AppProvider = ({ children }) => {
       })
     );
 
-    if (isSupabaseConfigured) {
+    if (isRemoteSession) {
       await supabase
         .from('appointments')
-        .update({ status, cancelReason })
+        .update({ status })
         .eq('id', id);
     }
 
@@ -259,20 +445,20 @@ export const AppProvider = ({ children }) => {
       ...item,
       id: `w-${Date.now()}`,
       dateAdded: new Date().toISOString().split('T')[0],
-      shop_id: currentUser?.shopId || 'loja-1'
+      shop_id: !currentUser?.shopId || currentUser?.shopId === 'all' ? 'loja-1' : currentUser.shopId
     };
     
     setWaitlist((prev) => [...prev, newItem]);
 
-    if (isSupabaseConfigured) {
-      await supabase.from('waitlist').insert(newItem);
+    if (isRemoteSession) {
+      await supabase.from('waitlist').insert(mapWaitToSnake(newItem));
     }
   };
 
   const removeWaitlist = async (id) => {
     setWaitlist((prev) => prev.filter((item) => item.id !== id));
 
-    if (isSupabaseConfigured) {
+    if (isRemoteSession) {
       await supabase.from('waitlist').delete().eq('id', id);
     }
   };
@@ -311,7 +497,7 @@ export const AppProvider = ({ children }) => {
       id: `pur-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
       status: 'Aguardando Laboratório',
-      shop_id: currentUser?.shopId || 'loja-1'
+      shop_id: !currentUser?.shopId || currentUser?.shopId === 'all' ? 'loja-1' : currentUser.shopId
     };
 
     const patient = patients.find((p) => p.id === patientId);
@@ -394,7 +580,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    if (isSupabaseConfigured) {
+    if (isRemoteSession) {
       await supabase.auth.signOut();
     }
     setCurrentUser(null);
@@ -409,6 +595,7 @@ export const AppProvider = ({ children }) => {
         patients,
         appointments,
         waitlist,
+        dataStatus,
         professionals: INITIAL_PROFESSIONALS,
         rooms: INITIAL_ROOMS,
         activeTab,
@@ -417,7 +604,7 @@ export const AppProvider = ({ children }) => {
         setSelectedPatientId,
         addPatient,
         updatePatient,
-        deletePatient,
+        setPatientActiveStatus,
         addAppointment,
         updateAppointmentStatus,
         addWaitlist,
@@ -428,7 +615,9 @@ export const AppProvider = ({ children }) => {
         activePrintData,
         setActivePrintData,
         clinicSettings,
-        updateClinicSettings
+        updateClinicSettings,
+        theme,
+        toggleTheme
       }}
     >
       {children}

@@ -1,6 +1,9 @@
-import React, { useContext, useState } from 'react';
+import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ShoppingBag, Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer, FlaskConical } from 'lucide-react';
+import { Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer, FlaskConical } from 'lucide-react';
+import PageHeader from './PageHeader';
+import { StatusBadge } from './StatusBadge';
+import { StatePanel } from './StatePanel';
 
 const OpticalOrders = () => {
   const { currentUser, patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId, setActivePrintData } = useContext(AppContext);
@@ -64,22 +67,14 @@ const OpticalOrders = () => {
     setActiveTab('patients');
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Aguardando Laboratório': return { bg: '#fee2e2', text: '#991b1b', border: '#fecaca' };
-      case 'Em Produção': return { bg: '#fef3c7', text: '#92400e', border: '#fde68a' };
-      case 'Pronto para Retirada': return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
-      case 'Entregue': return { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' };
-      default: return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' };
-    }
-  };
-
   return (
-    <div>
-      <div style={{ marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '28px', fontWeight: 700 }}>Ordem de Serviço (OS) & Óptica</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Controle de confecção e entrega de óculos e lentes</p>
-      </div>
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Óptica"
+        title="Ordens de serviço"
+        description="Acompanhe a confecção, o pagamento e a entrega de óculos e lentes."
+        meta={`${activeCount} ${activeCount === 1 ? 'ordem ativa' : 'ordens ativas'}`}
+      />
 
       {/* Grid de OS */}
       <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
@@ -125,24 +120,22 @@ const OpticalOrders = () => {
       </div>
 
       {/* Barra de Filtros e Busca */}
-      <div className="card">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ position: 'relative', flexGrow: 1, minWidth: '250px' }}>
+      <div className="card toolbar-card">
+        <div className="filter-toolbar">
+          <div className="filter-toolbar-fields">
+          <div className="search-field">
             <input
               type="text"
               className="form-control"
               placeholder="Buscar por OS, Paciente ou Item..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '38px' }}
             />
-            <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
+            <Search size={18} />
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
             <select
-              className="form-control"
-              style={{ width: '220px' }}
+              className="form-control select-compact"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -159,80 +152,77 @@ const OpticalOrders = () => {
       </div>
 
       {/* Lista de Ordens */}
-      <div className="card" style={{ padding: '0' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+      <div className="card data-card">
+        <div className="table-scroll">
+          <table className="data-table">
             <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid var(--border-color)' }}>
-                <th style={{ padding: '16px 20px', fontWeight: 600 }}>Nº da OS</th>
-                <th style={{ padding: '16px 20px', fontWeight: 600 }}>Paciente</th>
-                <th style={{ padding: '16px 20px', fontWeight: 600 }}>Data da Compra</th>
-                <th style={{ padding: '16px 20px', fontWeight: 600 }}>Itens do Pedido</th>
-                <th style={{ padding: '16px 20px', fontWeight: 600 }}>Valor (R$)</th>
-                <th style={{ padding: '16px 20px', fontWeight: 600 }}>Status da OS</th>
-                <th style={{ padding: '16px 20px', fontWeight: 600, textAlign: 'center' }}>Ações</th>
+              <tr>
+                <th>Nº da OS</th>
+                <th>Paciente</th>
+                <th>Data da Compra</th>
+                <th>Itens do Pedido</th>
+                <th>Valor (R$)</th>
+                <th>Status da OS</th>
+                <th style={{ textAlign: 'right' }}>Ações</th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    Nenhuma ordem de serviço encontrada nos critérios de busca.
+                  <td colSpan="7" className="table-empty">
+                    <StatePanel
+                      type={searchTerm || statusFilter !== 'all' ? 'search' : 'empty'}
+                      title={searchTerm || statusFilter !== 'all'
+                        ? 'Nenhuma ordem corresponde aos filtros'
+                        : 'Nenhuma ordem de serviço cadastrada'}
+                      description={searchTerm || statusFilter !== 'all'
+                        ? 'Limpe a busca ou escolha outro status.'
+                        : 'As ordens criadas nos prontuários aparecerão aqui.'}
+                      action={searchTerm || statusFilter !== 'all' ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setSearchTerm('');
+                            setStatusFilter('all');
+                          }}
+                        >
+                          Limpar filtros
+                        </button>
+                      ) : null}
+                    />
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => {
-                  const colors = getStatusColor(order.status);
-                  return (
-                    <tr key={order.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'var(--transition-fast)' }}>
-                      <td style={{ padding: '16px 20px', fontWeight: 700 }}>{order.osNumber}</td>
-                      <td style={{ padding: '16px 20px' }}>
+                filteredOrders.map((order) => (
+                    <tr key={order.id}>
+                      <td style={{ fontWeight: 700 }}>{order.osNumber}</td>
+                      <td>
                         <button
                           onClick={() => handlePatientClick(order.patientId)}
-                          style={{
-                            border: 'none',
-                            background: 'none',
-                            color: 'var(--primary)',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            textDecoration: 'underline',
-                            fontSize: '14px',
-                            padding: 0
-                          }}
+                          className="table-link"
                         >
                           {order.patientName}
                         </button>
                       </td>
-                      <td style={{ padding: '16px 20px' }}>{new Date(order.date).toLocaleDateString('pt-BR')}</td>
-                      <td style={{ padding: '16px 20px', color: 'var(--text-main)', maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <td>{new Date(order.date).toLocaleDateString('pt-BR')}</td>
+                      <td style={{ maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {order.item}
                       </td>
-                      <td style={{ padding: '16px 20px', fontWeight: 600 }}>
+                      <td style={{ fontWeight: 600 }}>
                         R$ {parseFloat(order.value).toFixed(2)}
                       </td>
-                      <td style={{ padding: '16px 20px' }}>
-                        <span
-                          style={{
-                            backgroundColor: colors.bg,
-                            color: colors.text,
-                            border: `1px solid ${colors.border}`,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {order.status}
-                        </span>
+                      <td>
+                        <StatusBadge status={order.status} />
                       </td>
-                      <td style={{ padding: '16px 20px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <td>
+                        <div className="table-actions">
                           <select
                             value={order.status}
                             onChange={(e) => updatePurchaseStatus(order.patientId, order.id, e.target.value)}
-                            className="form-control"
-                            style={{ width: '160px', padding: '6px', fontSize: '12px' }}
+                            className="form-control select-compact"
+                            style={{ minWidth: '160px', minHeight: '34px', padding: '5px 8px', fontSize: '12px' }}
+                            aria-label={`Alterar status da OS ${order.osNumber}`}
                           >
                             <option>Aguardando Laboratório</option>
                             <option>Em Produção</option>
@@ -244,35 +234,34 @@ const OpticalOrders = () => {
 
                           <button
                             onClick={() => handlePatientClick(order.patientId)}
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: '6px' }}
+                            className="icon-button"
                             title="Ver Prontuário"
+                            aria-label={`Ver prontuário de ${order.patientName}`}
                           >
                             <Eye size={14} />
                           </button>
 
                           <button
                             onClick={() => triggerPrintOS(order, 'cliente')}
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: '6px' }}
+                            className="icon-button"
                             title="Imprimir Via do Cliente (OS)"
+                            aria-label={`Imprimir via do cliente da OS ${order.osNumber}`}
                           >
                             <Printer size={14} />
                           </button>
 
                           <button
                             onClick={() => triggerPrintOS(order, 'laboratorio')}
-                            className="btn btn-secondary btn-sm"
-                            style={{ padding: '6px' }}
+                            className="icon-button"
                             title="Imprimir Via do Laboratório (OS)"
+                            aria-label={`Imprimir via do laboratório da OS ${order.osNumber}`}
                           >
                             <FlaskConical size={14} />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+                  ))
               )}
             </tbody>
           </table>

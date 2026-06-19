@@ -1,17 +1,20 @@
-import React, { useContext, useState } from 'react';
+import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { User, Users, Building2, Save, UserPlus, Shield } from 'lucide-react';
+import { User, Users, Building2, Save, Lock } from 'lucide-react';
+import PageHeader from './PageHeader';
+import { TeamAccessManager } from './TeamAccessManager';
 
 const SettingsManager = () => {
   const {
     currentUser,
-    professionals,
+    setCurrentUser,
     clinicSettings,
     updateClinicSettings
   } = useContext(AppContext);
 
-  const [activeSubTab, setActiveSubTab] = useState('clinic'); // clinic, team, account
+  const isAdmin = currentUser?.role === 'admin';
+  const [activeSubTab, setActiveSubTab] = useState(() => isAdmin ? 'clinic' : 'account'); // clinic, team, account
 
   // State para Dados da Clínica
   const [clinicName, setClinicName] = useState(clinicSettings.name || '');
@@ -20,13 +23,74 @@ const SettingsManager = () => {
   const [clinicPhone, setClinicPhone] = useState(clinicSettings.phone || '');
   const [loadingSettings, setLoadingSettings] = useState(false);
 
-  // State para Cadastro de Colaborador
-  const [empName, setEmpName] = useState('');
-  const [empEmail, setEmpEmail] = useState('');
-  const [empPassword, setEmpPassword] = useState('');
-  const [empRole, setEmpRole] = useState('recepcao');
-  const [empShop, setEmpShop] = useState('loja-1');
-  const [loadingRegister, setLoadingRegister] = useState(false);
+  // State para Personalização de Conta do Usuário
+  const [profileName, setProfileName] = useState(currentUser?.name || '');
+  const [newPasswordState, setNewPasswordState] = useState('');
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!profileName.trim()) return;
+
+    setUpdatingProfile(true);
+
+    if (isSupabaseConfigured && !currentUser?.isDemo) {
+      try {
+        const { error } = await supabase.auth.updateUser({
+          data: { name: profileName }
+        });
+
+        if (error) throw error;
+
+        // Atualizar estado local do usuário no contexto
+        setCurrentUser((prev) => ({
+          ...prev,
+          name: profileName
+        }));
+
+        alert('Nome de perfil atualizado com sucesso!');
+      } catch (err) {
+        alert('Erro ao atualizar perfil: ' + err.message);
+      } finally {
+        setUpdatingProfile(false);
+      }
+    } else {
+      setCurrentUser((prev) => ({ ...prev, name: profileName }));
+      alert('Nome atualizado neste ambiente de teste.');
+      setUpdatingProfile(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    if (newPasswordState.length < 6) {
+      alert('A senha deve ter pelo menos 6 caracteres!');
+      return;
+    }
+
+    setUpdatingPassword(true);
+
+    if (isSupabaseConfigured && !currentUser?.isDemo) {
+      try {
+        const { error } = await supabase.auth.updateUser({
+          password: newPasswordState
+        });
+
+        if (error) throw error;
+
+        setNewPasswordState('');
+        alert('Senha atualizada com sucesso!');
+      } catch (err) {
+        alert('Erro ao atualizar senha: ' + err.message);
+      } finally {
+        setUpdatingPassword(false);
+      }
+    } else {
+      alert('No modo local a senha não é utilizada. Entre com uma conta real para alterá-la.');
+      setUpdatingPassword(false);
+    }
+  };
 
   // Handler para Salvar Dados da Clínica
   const handleSaveClinicSettings = (e) => {
@@ -42,75 +106,46 @@ const SettingsManager = () => {
     alert('Configurações da clínica salvas com sucesso! As próximas impressões de receitas e OS exibirão estes dados.');
   };
 
-  // Handler para cadastrar colaborador
-  const handleRegisterEmployee = async (e) => {
-    e.preventDefault();
-    if (empPassword.length < 6) {
-      alert('A senha deve ter no mínimo 6 caracteres!');
-      return;
-    }
-
-    setLoadingRegister(true);
-
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await supabase.auth.signUp({
-          email: empEmail,
-          password: empPassword,
-          options: {
-            data: {
-              name: empName,
-              role: empRole,
-              shop_id: empShop
-            }
-          }
-        });
-
-        if (error) throw error;
-
-        alert(`Colaborador "${empName}" cadastrado no Supabase com sucesso!`);
-        setEmpName('');
-        setEmpEmail('');
-        setEmpPassword('');
-      } catch (err) {
-        alert('Erro ao cadastrar colaborador no Supabase: ' + err.message);
-      } finally {
-        setLoadingRegister(false);
-      }
-    } else {
-      // Simulação para o modo Demo
-      alert(`[SIMULAÇÃO OFFLINE] Login de colaborador criado com sucesso!\nNome: ${empName}\nE-mail: ${empEmail}\nFunção: ${empRole}\nFilial: ${empShop}`);
-      setEmpName('');
-      setEmpEmail('');
-      setEmpPassword('');
-      setLoadingRegister(false);
-    }
-  };
-
   return (
-    <div className="card" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', minHeight: '80vh' }}>
-      <div style={{ marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-        <h2 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 6px' }}>Ajustes & Configurações</h2>
-        <p style={{ color: 'var(--text-muted)', margin: 0 }}>Gerencie as preferências da clínica, acessos e perfil de usuário administrador</p>
-      </div>
+    <div className="page-stack">
+      <PageHeader
+        eyebrow={isAdmin ? 'Administração' : 'Conta'}
+        title="Configurações"
+        description={isAdmin
+          ? 'Gerencie as preferências da clínica, os acessos da equipe e seu perfil.'
+          : 'Consulte seus dados de acesso e personalize seu perfil.'}
+        meta={isAdmin ? 'Acesso administrativo' : 'Preferências pessoais'}
+      />
+
+      <div className="card" style={{ padding: '24px', borderRadius: 'var(--radius-lg)', minHeight: '70vh' }}>
 
       {/* Sub-abas de Ajustes */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+      <div className="settings-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }} role="group" aria-label="Seções de configuração">
+        {isAdmin && (
+          <>
+            <button
+              type="button"
+              aria-pressed={activeSubTab === 'clinic'}
+              className={`btn ${activeSubTab === 'clinic' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
+              onClick={() => setActiveSubTab('clinic')}
+            >
+              <Building2 size={16} /> Dados do Consultório
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeSubTab === 'team'}
+              className={`btn ${activeSubTab === 'team' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
+              onClick={() => setActiveSubTab('team')}
+            >
+              <Users size={16} /> Equipe & Acessos
+            </button>
+          </>
+        )}
         <button
-          className={`btn ${activeSubTab === 'clinic' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
-          onClick={() => setActiveSubTab('clinic')}
-        >
-          <Building2 size={16} /> Dados do Consultório
-        </button>
-        <button
-          className={`btn ${activeSubTab === 'team' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
-          onClick={() => setActiveSubTab('team')}
-        >
-          <Users size={16} /> Equipe & Acessos
-        </button>
-        <button
+          type="button"
+          aria-pressed={activeSubTab === 'account'}
           className={`btn ${activeSubTab === 'account' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
           onClick={() => setActiveSubTab('account')}
@@ -121,7 +156,7 @@ const SettingsManager = () => {
 
       <div style={{ padding: '8px 0' }}>
         {/* ABA 1: DADOS DO CONSULTÓRIO */}
-        {activeSubTab === 'clinic' && (
+        {isAdmin && activeSubTab === 'clinic' && (
           <div style={{ maxWidth: '600px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Building2 size={20} color="var(--primary)" /> Perfil do Consultório / Óptica
@@ -193,170 +228,114 @@ const SettingsManager = () => {
         )}
 
         {/* ABA 2: EQUIPE & ACESSOS */}
-        {activeSubTab === 'team' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' }}>
-            {/* Form de Cadastro */}
-            <div style={{ maxWidth: '480px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <UserPlus size={20} color="var(--primary)" /> Cadastrar Colaborador
+        {isAdmin && activeSubTab === 'team' && (
+          <TeamAccessManager currentUser={currentUser} />
+        )}
+
+        {/* ABA 3: MINHA CONTA */}
+        {activeSubTab === 'account' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '600px' }}>
+
+            {/* Editar Informações Básicas */}
+            <div style={{ border: '1px solid var(--border-color)', padding: '24px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-title)' }}>
+                Dados de Perfil
               </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-                Cria novas contas de acesso para funcionários com funções e filiais específicas embutidas nos metadados.
+                Personalize o seu nome de exibição e verifique os detalhes de acesso da sua conta.
               </p>
 
-              <form onSubmit={handleRegisterEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nome Completo*</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    required
-                    value={empName}
-                    onChange={(e) => setEmpName(e.target.value)}
-                    disabled={loadingRegister}
-                  />
-                </div>
-                <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>E-mail corporativo*</label>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px' }}>E-mail de acesso (Não alterável)</span>
                   <input
                     type="email"
                     className="form-control"
-                    required
-                    value={empEmail}
-                    onChange={(e) => setEmpEmail(e.target.value)}
-                    disabled={loadingRegister}
+                    value={currentUser?.email || ''}
+                    disabled
+                    style={{ backgroundColor: 'var(--bg-primary)', cursor: 'not-allowed' }}
                   />
                 </div>
+
                 <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Senha Provisória*</label>
+                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nome Completo / Exibição*</label>
                   <input
-                    type="password"
-                    placeholder="Mínimo 6 dígitos"
+                    type="text"
                     className="form-control"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
                     required
-                    value={empPassword}
-                    onChange={(e) => setEmpPassword(e.target.value)}
-                    disabled={loadingRegister}
+                    placeholder="Seu nome"
                   />
                 </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Função (Acesso)</label>
-                    <select
-                      className="form-control"
-                      value={empRole}
-                      onChange={(e) => setEmpRole(e.target.value)}
-                      disabled={loadingRegister}
-                    >
-                      <option value="recepcao">Recepção</option>
-                      <option value="medico">Especialista (Médico)</option>
-                      <option value="vendedor">Vendedor (Óptica)</option>
-                      <option value="admin">Administrador Geral</option>
-                    </select>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>Nível de Acesso</span>
+                    <strong style={{ color: 'var(--primary)', display: 'block', marginTop: '4px' }}>
+                      {currentUser?.role === 'admin' ? 'Administrador Geral' : currentUser?.role || ''}
+                    </strong>
                   </div>
-                  <div className="form-group">
-                    <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Filial Atribuída</label>
-                    <select
-                      className="form-control"
-                      value={empShop}
-                      onChange={(e) => setEmpShop(e.target.value)}
-                      disabled={loadingRegister}
-                    >
-                      <option value="loja-1">Filial 1 - Centro</option>
-                      <option value="loja-2">Filial 2 - Shopping</option>
-                      <option value="all">Todas as Filiais</option>
-                    </select>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>Loja / Filial atual</span>
+                    <strong style={{ display: 'block', marginTop: '4px' }}>
+                      {currentUser?.shopId === 'all'
+                        ? 'Consolidado (Todas as Filiais)'
+                        : currentUser?.shopId === 'loja-1'
+                        ? 'Filial 1 - Centro'
+                        : 'Filial 2 - Shopping'}
+                    </strong>
                   </div>
                 </div>
 
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ width: '100%', marginTop: '12px', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  disabled={loadingRegister}
+                  style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', marginTop: '8px', cursor: 'pointer' }}
+                  disabled={updatingProfile}
                 >
-                  <UserPlus size={18} /> {loadingRegister ? 'Registrando...' : 'Criar Conta de Acesso'}
+                  <Save size={18} /> {updatingProfile ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </form>
             </div>
 
-            {/* Listagem de Profissionais */}
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Shield size={20} color="var(--primary)" /> Profissionais Ativos
+            {/* Alterar Senha */}
+            <div style={{ border: '1px solid var(--border-color)', padding: '24px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-title)' }}>
+                Segurança (Alterar Senha)
               </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-                Lista de especialistas cadastrados no sistema para emissão de prescrições e atendimentos.
+                Defina uma nova senha forte para acessar o sistema.
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {professionals && professionals.length > 0 ? (
-                  professionals.map((prof) => (
-                    <div
-                      key={prof.id}
-                      style={{
-                        padding: '12px 16px',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: 'var(--radius-md)',
-                        backgroundColor: 'rgba(0,0,0,0.01)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <strong style={{ display: 'block', fontSize: '14px' }}>{prof.name}</strong>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{prof.specialty}</span>
-                      </div>
-                      <div style={{ fontSize: '11px', padding: '4px 8px', backgroundColor: 'var(--primary-light)', color: 'var(--primary)', borderRadius: '12px', fontWeight: 'bold' }}>
-                        CRM: {prof.crm || 'N/A'}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Nenhum profissional cadastrado.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+              <form onSubmit={handleUpdatePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nova Senha*</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={newPasswordState}
+                    onChange={(e) => setNewPasswordState(e.target.value)}
+                    required
+                    placeholder="Mínimo 6 caracteres"
+                    minLength={6}
+                  />
+                </div>
 
-        {/* ABA 3: MINHA CONTA */}
-        {activeSubTab === 'account' && (
-          <div style={{ maxWidth: '500px', border: '1px solid var(--border-color)', padding: '20px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(0,0,0,0.01)' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
-              Dados de Perfil
-            </h3>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Nome completo</span>
-                <strong>{currentUser.name}</strong>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>E-mail de acesso</span>
-                <strong>{currentUser.email}</strong>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Função / Nível de Acesso</span>
-                <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-                  {currentUser.role === 'admin' ? 'Administrador Geral' : currentUser.role}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Loja / Filial atual</span>
-                <strong>
-                  {currentUser.shopId === 'all'
-                    ? 'Consolidado (Todas as Filiais)'
-                    : currentUser.shopId === 'loja-1'
-                    ? 'Filial 1 - Centro'
-                    : 'Filial 2 - Shopping'}
-                </strong>
-              </div>
+                <button
+                  type="submit"
+                  className="btn btn-secondary"
+                  style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', marginTop: '8px', cursor: 'pointer' }}
+                  disabled={updatingPassword}
+                >
+                  <Lock size={18} /> {updatingPassword ? 'Atualizando...' : 'Atualizar Senha'}
+                </button>
+              </form>
             </div>
+
           </div>
         )}
+      </div>
       </div>
     </div>
   );

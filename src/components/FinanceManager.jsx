@@ -1,8 +1,10 @@
-import React, { useContext, useState } from 'react';
+import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { DollarSign, Percent, AlertCircle, CheckSquare, Search, Eye, Users, Settings, UserPlus, Database } from 'lucide-react';
+import { DollarSign, AlertCircle, CheckSquare } from 'lucide-react';
 import { calculateCommission } from '../utils/helpers';
+import PageHeader from './PageHeader';
+import { StatusBadge } from './StatusBadge';
+import { StatePanel } from './StatePanel';
 
 const FinanceManager = () => {
   const {
@@ -14,6 +16,14 @@ const FinanceManager = () => {
     setSelectedPatientId,
     professionals
   } = useContext(AppContext);
+
+  const formatValue = (val) => {
+    const num = Number(val);
+    return (isNaN(num) ? 0 : num).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
 
   const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats
   const [selectedProfId, setSelectedProfId] = useState(professionals[0]?.id || '1');
@@ -91,26 +101,24 @@ const FinanceManager = () => {
   const profPrivateApps = profApps.filter((app) => app.paymentType === 'particular');
   const profInsuranceApps = profApps.filter((app) => app.paymentType === 'convenio');
 
-  const {
-    privateCommission,
-    insuranceCommission,
-    total: totalCommission
-  } = calculateCommission(profPrivateApps.length, profInsuranceApps.length, PRIVATE_CONSULTATION_PRICE);
+  const { total: totalCommission } = calculateCommission(
+    profPrivateApps.length,
+    profInsuranceApps.length,
+    PRIVATE_CONSULTATION_PRICE
+  );
 
 
 
 
 
   return (
-    <div>
-      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h2 style={{ fontSize: '28px', fontWeight: 700 }}>Gestão Financeira</h2>
-          <p style={{ color: 'var(--text-muted)' }}>Demonstrativo financeiro da clínica e da ótica integrada</p>
-        </div>
-
-        {/* Seletor de filial para consolidado vs individual */}
-        {currentUser?.shopId === 'all' && (
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="Gestão"
+        title="Financeiro"
+        description="Acompanhe receitas, contas a receber e comissões da clínica e da óptica."
+        meta={`R$ ${formatValue(totalReceivables)} a receber`}
+        actions={currentUser?.shopId === 'all' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <label style={{ fontSize: '13px', fontWeight: 600 }}>Filial:</label>
             <select
@@ -124,17 +132,17 @@ const FinanceManager = () => {
               <option value="loja-2">Filial 2 - Shopping</option>
             </select>
           </div>
-        )}
-      </div>
+        ) : null}
+      />
 
       {/* Grid de Métricas Financeiras */}
-      <div className="dashboard-grid">
+      <div className="dashboard-grid finance-stats">
         <div className="stat-card">
           <div className="stat-icon" style={{ backgroundColor: '#dcfce7', color: '#166534' }}>
             <DollarSign size={24} />
           </div>
           <div className="stat-details">
-            <div className="stat-value">R$ {totalRevenue.toFixed(2)}</div>
+            <div className="stat-value">R$ {formatValue(totalRevenue)}</div>
             <div className="stat-label">Faturamento Total</div>
           </div>
         </div>
@@ -144,7 +152,7 @@ const FinanceManager = () => {
             <DollarSign size={24} />
           </div>
           <div className="stat-details">
-            <div className="stat-value">R$ {totalOpticalSales.toFixed(2)}</div>
+            <div className="stat-value">R$ {formatValue(totalOpticalSales)}</div>
             <div className="stat-label">Receita da Ótica</div>
           </div>
         </div>
@@ -154,7 +162,7 @@ const FinanceManager = () => {
             <DollarSign size={24} />
           </div>
           <div className="stat-details">
-            <div className="stat-value">R$ {totalClinicalSales.toFixed(2)}</div>
+            <div className="stat-value">R$ {formatValue(totalClinicalSales)}</div>
             <div className="stat-label">Receita Médica</div>
           </div>
         </div>
@@ -164,7 +172,7 @@ const FinanceManager = () => {
             <AlertCircle size={24} />
           </div>
           <div className="stat-details">
-            <div className="stat-value">R$ {totalReceivables.toFixed(2)}</div>
+            <div className="stat-value">R$ {formatValue(totalReceivables)}</div>
             <div className="stat-label">Contas a Receber</div>
           </div>
         </div>
@@ -174,20 +182,26 @@ const FinanceManager = () => {
       <div className="section-grid">
         {/* Lado Esquerdo: Painel de Controle e Abas */}
         <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div className="tab-container" style={{ marginBottom: '20px' }}>
+          <div className="tab-container" style={{ marginBottom: '20px' }} role="group" aria-label="Seções financeiras">
             <button
+              type="button"
+              aria-pressed={activeSubTab === 'receivables'}
               className={`tab-btn ${activeSubTab === 'receivables' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('receivables')}
             >
               Contas a Receber ({unpaidPurchases.length})
             </button>
             <button
+              type="button"
+              aria-pressed={activeSubTab === 'commissions'}
               className={`tab-btn ${activeSubTab === 'commissions' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('commissions')}
             >
               Comissões de Especialistas
             </button>
             <button
+              type="button"
+              aria-pressed={activeSubTab === 'stats'}
               className={`tab-btn ${activeSubTab === 'stats' ? 'active' : ''}`}
               onClick={() => setActiveSubTab('stats')}
             >
@@ -207,43 +221,44 @@ const FinanceManager = () => {
               </div>
 
               {unpaidPurchases.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                  Excelente! Nenhuma pendência financeira em aberto no momento.
-                </div>
+                <StatePanel
+                  type="empty"
+                  title="Nenhuma pendência financeira"
+                  description="Todas as ordens desta filial estão sem pagamentos em aberto."
+                />
               ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                <div className="table-scroll">
+                  <table className="data-table">
                     <thead>
-                      <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid var(--border-color)' }}>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nº OS</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Paciente</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Item Adquirido</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Data do Pedido</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Valor do Débito</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Ação</th>
+                      <tr>
+                        <th>Nº OS</th>
+                        <th>Paciente</th>
+                        <th>Item Adquirido</th>
+                        <th>Data do Pedido</th>
+                        <th>Valor do Débito</th>
+                        <th style={{ textAlign: 'right' }}>Ação</th>
                       </tr>
                     </thead>
                     <tbody>
                       {unpaidPurchases.map((pur) => (
-                        <tr key={pur.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '12px 16px', fontWeight: 700 }}>{pur.osNumber}</td>
-                          <td style={{ padding: '12px 16px' }}>
+                        <tr key={pur.id}>
+                          <td style={{ fontWeight: 700 }}>{pur.osNumber}</td>
+                          <td>
                             <button
                               onClick={() => handlePatientClick(pur.patientId)}
-                              style={{ border: 'none', background: 'none', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                              className="table-link"
                             >
                               {pur.patientName}
                             </button>
                           </td>
-                          <td style={{ padding: '12px 16px' }}>{pur.item}</td>
-                          <td style={{ padding: '12px 16px' }}>{new Date(pur.date).toLocaleDateString('pt-BR')}</td>
-                          <td style={{ padding: '12px 16px', fontWeight: 700, color: '#dc2626' }}>
-                            R$ {parseFloat(pur.value).toFixed(2)}
+                          <td>{pur.item}</td>
+                          <td>{new Date(pur.date).toLocaleDateString('pt-BR')}</td>
+                          <td style={{ fontWeight: 700, color: 'var(--status-cancelado-text)' }}>
+                            R$ {formatValue(pur.value)}
                           </td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <td style={{ textAlign: 'right' }}>
                             <button
                               className="btn btn-primary btn-sm"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 12px' }}
                               onClick={() => handleSettlePayment(pur.patientId, pur.id)}
                             >
                               <CheckSquare size={14} /> Dar Baixa
@@ -261,7 +276,7 @@ const FinanceManager = () => {
           {/* Aba: Comissões */}
           {activeSubTab === 'commissions' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div className="finance-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                   <h4 style={{ fontSize: '16px', margin: '0 0 4px' }}>Cálculo de Comissões de Atendimento</h4>
                   <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0 }}>
@@ -284,8 +299,8 @@ const FinanceManager = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
-                <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', height: 'fit-content' }}>
+              <div className="commission-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
+                <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', height: 'fit-content' }}>
                   <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                     <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', fontSize: '24px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
                       {selectedProf?.name.split(' ').slice(-1)[0][0]}
@@ -305,7 +320,7 @@ const FinanceManager = () => {
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 'bold', borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '12px' }}>
                       <span>Total Comissão:</span>
-                      <span style={{ color: 'var(--accent)' }}>R$ {totalCommission.toFixed(2)}</span>
+                      <span style={{ color: 'var(--accent)' }}>R$ {formatValue(totalCommission)}</span>
                     </div>
                   </div>
                 </div>
@@ -313,9 +328,12 @@ const FinanceManager = () => {
                 <div>
                   <h5 style={{ fontSize: '14px', marginBottom: '12px' }}>Atendimentos Faturados</h5>
                   {profApps.length === 0 ? (
-                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-                      Nenhum atendimento finalizado registrado para este especialista na filial selecionada.
-                    </div>
+                    <StatePanel
+                      type="empty"
+                      title="Nenhum atendimento faturado"
+                      description="Não há atendimentos finalizados para este especialista na filial selecionada."
+                      compact
+                    />
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '250px', overflowY: 'auto' }}>
                       {profApps.map((app) => {
@@ -325,18 +343,16 @@ const FinanceManager = () => {
                           PRIVATE_CONSULTATION_PRICE
                         ).total;
                         return (
-                          <div key={app.id} style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#fff', justifyContent: 'space-between', fontSize: '13px' }}>
+                          <div key={app.id} style={{ display: 'flex', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)', justifyContent: 'space-between', fontSize: '13px' }}>
                             <div>
-                              <strong style={{ color: 'var(--bg-dark)' }}>{app.patientName}</strong>
+                              <strong style={{ color: 'var(--text-title)' }}>{app.patientName}</strong>
                               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                                 Data: {new Date(app.date + 'T00:00:00').toLocaleDateString('pt-BR')} | Procedimento: {app.serviceName || app.serviceId}
                               </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>
-                              <span style={{ fontSize: '11px', backgroundColor: app.paymentType === 'particular' ? '#ecfdf5' : '#f0f9ff', color: app.paymentType === 'particular' ? '#059669' : '#0284c7', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'capitalize' }}>
-                                {app.paymentType}
-                              </span>
-                              <div style={{ fontWeight: 700, marginTop: '4px', color: 'var(--bg-dark)' }}>Comissão: R$ {commValue.toFixed(2)}</div>
+                              <StatusBadge status={app.paymentType} />
+                               <div style={{ fontWeight: 700, marginTop: '4px', color: 'var(--text-title)' }}>Comissão: R$ {formatValue(commValue)}</div>
                             </div>
                           </div>
                         );
@@ -365,7 +381,7 @@ const FinanceManager = () => {
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Ótica & Acessórios</span>
-                        <strong>R$ {totalOpticalSales.toFixed(2)} ({totalRevenue > 0 ? ((totalOpticalSales / totalRevenue) * 100).toFixed(0) : 0}%)</strong>
+                        <strong>R$ {formatValue(totalOpticalSales)} ({totalRevenue > 0 ? ((totalOpticalSales / totalRevenue) * 100).toFixed(0) : 0}%)</strong>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${totalRevenue > 0 ? (totalOpticalSales / totalRevenue) * 100 : 0}%`, height: '100%', backgroundColor: 'var(--primary)', borderRadius: '4px' }}></div>
@@ -375,7 +391,7 @@ const FinanceManager = () => {
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Consultas & Procedimentos</span>
-                        <strong>R$ {totalClinicalSales.toFixed(2)} ({totalRevenue > 0 ? ((totalClinicalSales / totalRevenue) * 100).toFixed(0) : 0}%)</strong>
+                        <strong>R$ {formatValue(totalClinicalSales)} ({totalRevenue > 0 ? ((totalClinicalSales / totalRevenue) * 100).toFixed(0) : 0}%)</strong>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${totalRevenue > 0 ? (totalClinicalSales / totalRevenue) * 100 : 0}%`, height: '100%', backgroundColor: 'var(--accent)', borderRadius: '4px' }}></div>
@@ -390,7 +406,7 @@ const FinanceManager = () => {
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Consultas Particulares</span>
-                        <strong>R$ {totalClinicalPrivateSales.toFixed(2)} ({totalClinicalSales > 0 ? ((totalClinicalPrivateSales / totalClinicalSales) * 100).toFixed(0) : 0}%)</strong>
+                        <strong>R$ {formatValue(totalClinicalPrivateSales)} ({totalClinicalSales > 0 ? ((totalClinicalPrivateSales / totalClinicalSales) * 100).toFixed(0) : 0}%)</strong>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${totalClinicalSales > 0 ? (totalClinicalPrivateSales / totalClinicalSales) * 100 : 0}%`, height: '100%', backgroundColor: '#059669', borderRadius: '4px' }}></div>
@@ -400,7 +416,7 @@ const FinanceManager = () => {
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
                         <span>Repasses de Convênio (Unimed)</span>
-                        <strong>R$ {totalClinicalInsuranceSales.toFixed(2)} ({totalClinicalSales > 0 ? ((totalClinicalInsuranceSales / totalClinicalSales) * 100).toFixed(0) : 0}%)</strong>
+                        <strong>R$ {formatValue(totalClinicalInsuranceSales)} ({totalClinicalSales > 0 ? ((totalClinicalInsuranceSales / totalClinicalSales) * 100).toFixed(0) : 0}%)</strong>
                       </div>
                       <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${totalClinicalSales > 0 ? (totalClinicalInsuranceSales / totalClinicalSales) * 100 : 0}%`, height: '100%', backgroundColor: '#0284c7', borderRadius: '4px' }}></div>

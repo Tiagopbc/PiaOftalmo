@@ -4,6 +4,31 @@ import './index.css'
 import App from './App.jsx'
 import { AppProvider } from './context/AppContext'
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    if (import.meta.env.PROD) {
+      navigator.serviceWorker.register('/sw.js').catch((error) => {
+        console.warn('Não foi possível ativar o modo offline.', error)
+      })
+      return
+    }
+
+    // Um Service Worker antigo mascarava alterações do Vite no localhost.
+    // Em desenvolvimento, remova registros e caches para garantir HMR real.
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.all(registrations.map((registration) => registration.unregister()))
+
+    if ('caches' in window) {
+      const cacheNames = await caches.keys()
+      await Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName.startsWith('pia-oftalmo-'))
+          .map((cacheName) => caches.delete(cacheName))
+      )
+    }
+  })
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppProvider>

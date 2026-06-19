@@ -1,6 +1,7 @@
-import React, { useContext, useState, useEffect, lazy, Suspense } from 'react';
+import { useContext, lazy, Suspense } from 'react';
 import { AppContext } from './context/AppContext';
 import Login from './components/Login';
+import { StatePanel } from './components/StatePanel';
 import { formatLabName } from './utils/helpers';
 
 // Lazy loading component tabs for bundle optimization
@@ -18,11 +19,13 @@ import {
   DollarSign,
   LogOut,
   Store,
-  Settings
+  Settings,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 function App() {
-  const { currentUser, logout, activeTab, setActiveTab, activePrintData, clinicSettings } = useContext(AppContext);
+  const { currentUser, logout, activeTab, setActiveTab, activePrintData, clinicSettings, theme, toggleTheme } = useContext(AppContext);
 
   // Se não estiver logado, exibe tela de login
   if (!currentUser) {
@@ -53,8 +56,11 @@ function App() {
 
     if (role === 'admin') {
       items.push({ id: 'finance', label: 'Financeiro', icon: <DollarSign size={20} /> });
-      items.push({ id: 'settings', label: 'Ajustes', icon: <Settings size={20} /> });
     }
+
+    // Todos podem acessar o próprio perfil; opções administrativas continuam
+    // protegidas dentro da tela de configurações.
+    items.push({ id: 'settings', label: 'Configurações', icon: <Settings size={20} /> });
 
     return items;
   };
@@ -104,6 +110,8 @@ function App() {
 
   return (
     <div className="app-container">
+      <a className="skip-link" href="#main-content">Pular para o conteúdo principal</a>
+
       {/* Mobile Top Header */}
       <header className="mobile-header">
         <div className="logo-container">
@@ -117,26 +125,45 @@ function App() {
             </span>
           </div>
         </div>
-        <button
-          onClick={logout}
-          style={{
-            border: 'none',
-            background: 'none',
-            color: 'var(--status-cancelado-text)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '12px',
-            fontWeight: 'bold'
-          }}
-        >
-          <LogOut size={16} /> Sair
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            style={{
+              border: 'none',
+              background: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+            aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button
+            type="button"
+            onClick={logout}
+            style={{
+              border: 'none',
+              background: 'none',
+              color: 'var(--status-cancelado-text)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}
+          >
+            <LogOut size={16} /> Sair
+          </button>
+        </div>
       </header>
 
       {/* Sidebar Navigation - Desktop */}
-      <aside className="sidebar">
+      <aside className="sidebar" aria-label="Menu lateral">
         <div className="logo-container">
           <div className="logo-icon">
             <Glasses size={24} />
@@ -166,12 +193,14 @@ function App() {
           <span>Loja: <strong>{getShopName(currentUser.shopId)}</strong></span>
         </div>
 
-        <nav className="nav-links">
+        <nav className="nav-links" aria-label="Navegação principal">
           {navItems.map((item) => (
             <button
+              type="button"
               key={item.id}
               className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
               onClick={() => setActiveTab(item.id)}
+              aria-current={activeTab === item.id ? 'page' : undefined}
             >
               {item.icon}
               {item.label}
@@ -182,57 +211,83 @@ function App() {
         <div className="sidebar-footer">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="user-profile">
-              <div className="user-avatar" style={{ textTransform: 'uppercase' }}>
+              <div className="user-avatar" style={{ textTransform: 'uppercase' }} aria-hidden="true">
                 {currentUser.name[0]}
               </div>
               <div className="user-info">
-                <div className="user-name" style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="user-name" style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentUser.name}
                 </div>
                 <div className="user-role">{getRoleBadge(currentUser.role)}</div>
               </div>
             </div>
 
-            <button
-              onClick={logout}
-              style={{
-                border: 'none',
-                background: 'none',
-                color: '#94a3b8',
-                cursor: 'pointer',
-                padding: '6px',
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-              title="Sair da Conta"
-            >
-              <LogOut size={18} />
-            </button>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+                title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+                aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+              >
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button
+                type="button"
+                onClick={logout}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+                title="Sair da Conta"
+                aria-label="Sair da conta"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
       {/* Main Content Pane */}
-      <main className="main-content">
+      <main className="main-content" id="main-content" tabIndex="-1">
         {/* Dynamic page component with lazy loading fallback */}
         <Suspense fallback={
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', gap: '12px' }}>
-            <div className="loader" style={{ width: '40px', height: '40px' }}></div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: '500' }}>Carregando painel...</span>
-          </div>
+          <StatePanel
+            type="loading"
+            title="Preparando a área de trabalho"
+            description="Carregando os recursos desta tela."
+            className="page-loading-state"
+          />
         }>
           {renderActiveTab()}
         </Suspense>
       </main>
 
       {/* Bottom Navigation - Mobile Tab Bar */}
-      <nav className="bottom-nav">
+      <nav className="bottom-nav" aria-label="Navegação móvel">
         {navItems.map((item) => (
           <button
+            type="button"
             key={item.id}
             className={`bottom-nav-item ${activeTab === item.id ? 'active' : ''}`}
             onClick={() => setActiveTab(item.id)}
+            aria-current={activeTab === item.id ? 'page' : undefined}
           >
             {item.icon}
             {item.label.split(' ')[0]}

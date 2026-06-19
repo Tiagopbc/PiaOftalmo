@@ -1,7 +1,8 @@
-import React, { useState, useContext } from 'react';
+import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { Glasses, Lock, Mail, Play, AlertCircle } from 'lucide-react';
+import { getAuthUserProfile } from '../utils/authUser';
+import { Glasses, Lock, Mail, AlertCircle, Play, Database } from 'lucide-react';
 
 const Login = () => {
   const { setCurrentUser } = useContext(AppContext);
@@ -10,12 +11,29 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [demoRole, setDemoRole] = useState('admin');
-  const [selectedShop, setSelectedShop] = useState('loja-1');
+
+  const handleDemoLogin = () => {
+    const names = {
+      admin: 'Administrador de Testes',
+      medico: 'Dr. Roberto Mendes',
+      recepcao: 'Clara — Recepção',
+      vendedor: 'Marcos — Óptica'
+    };
+
+    setCurrentUser({
+      id: `demo-${demoRole}`,
+      email: `${demoRole}@demo.local`,
+      name: names[demoRole],
+      role: demoRole,
+      shopId: demoRole === 'admin' ? 'all' : 'loja-1',
+      isDemo: true
+    });
+  };
 
   const handleRealLogin = async (e) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
-      setError('Supabase não configurado! Use o Acesso de Demonstração abaixo.');
+      setError('Supabase não configurado! Verifique as credenciais no arquivo .env.local.');
       return;
     }
 
@@ -30,41 +48,12 @@ const Login = () => {
 
       if (authError) throw authError;
 
-      // Buscar perfil no banco de dados para determinar a role (regra simplificada de metadados)
-      const user = data.user;
-      const role = user.user_metadata?.role || 'admin';
-      const name = user.user_metadata?.name || user.email.split('@')[0];
-      const shopId = user.user_metadata?.shop_id || 'loja-1';
-
-      setCurrentUser({
-        id: user.id,
-        email: user.email,
-        name,
-        role,
-        shopId
-      });
+      setCurrentUser(getAuthUserProfile(data.user));
     } catch (err) {
       setError(err.message || 'Erro ao realizar login.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoLogin = (e) => {
-    e.preventDefault();
-    let name = 'Administrador';
-    if (demoRole === 'medico') name = 'Dr. Roberto Mendes';
-    else if (demoRole === 'recepcao') name = 'Clara (Recepção)';
-    else if (demoRole === 'vendedor') name = 'Marcos (Ótica)';
-
-    setCurrentUser({
-      id: `demo-${demoRole}`,
-      email: `${demoRole}@demo-pia.com`,
-      name,
-      role: demoRole,
-      shopId: selectedShop,
-      isDemo: true
-    });
   };
 
   return (
@@ -74,7 +63,7 @@ const Login = () => {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        backgroundColor: 'var(--bg-dark)',
+        background: 'radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.28), transparent 36%), radial-gradient(circle at 80% 80%, rgba(13, 148, 136, 0.2), transparent 34%), var(--bg-dark)',
         padding: '20px',
         fontFamily: 'var(--font-body)'
       }}
@@ -83,12 +72,11 @@ const Login = () => {
         className="card"
         style={{
           width: '100%',
-          maxWidth: '450px',
+          maxWidth: '460px',
           padding: '40px',
           boxShadow: 'var(--shadow-xl)',
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          backgroundColor: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
           borderRadius: 'var(--radius-lg)'
         }}
       >
@@ -107,7 +95,7 @@ const Login = () => {
           >
             <Glasses size={32} />
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--bg-dark)' }}>PIA Oftalmo</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-title)' }}>PIA Oftalmo</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
             Portal de Acesso Integrado - Clínica & Óptica
           </p>
@@ -116,15 +104,16 @@ const Login = () => {
         {error && (
           <div
             style={{
-              backgroundColor: '#fee2e2',
-              color: '#dc2626',
+              backgroundColor: 'var(--status-cancelado)',
+              color: 'var(--status-cancelado-text)',
               padding: '12px 16px',
               borderRadius: 'var(--radius-md)',
               fontSize: '13px',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              border: '1px solid var(--border-color)'
             }}
           >
             <AlertCircle size={16} />
@@ -133,9 +122,9 @@ const Login = () => {
         )}
 
         {/* Formulário de Login Real (Supabase) */}
-        <form onSubmit={handleRealLogin} style={{ marginBottom: '24px' }}>
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <form onSubmit={handleRealLogin}>
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--text-main)' }}>
               <Mail size={14} /> E-mail
             </label>
             <input
@@ -145,11 +134,12 @@ const Login = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
+              required
             />
           </div>
 
           <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--text-main)' }}>
               <Lock size={14} /> Senha
             </label>
             <input
@@ -159,85 +149,52 @@ const Login = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              required
             />
           </div>
 
           <button
             type="submit"
             className="btn btn-primary"
-            style={{ width: '100%', padding: '12px' }}
+            style={{ width: '100%', padding: '12px', cursor: 'pointer', fontWeight: 600 }}
             disabled={loading}
           >
             {loading ? 'Autenticando...' : 'Entrar no Sistema'}
           </button>
         </form>
 
-        {/* Separador */}
-        <div style={{ display: 'flex', alignItems: 'center', margin: '24px 0', color: 'var(--text-muted)' }}>
-          <hr style={{ flexGrow: 1, border: 'none', borderTop: '1px solid var(--border-color)' }} />
-          <span style={{ padding: '0 10px', fontSize: '11px', textTransform: 'uppercase', fontWeight: 600 }}>Ou</span>
-          <hr style={{ flexGrow: 1, border: 'none', borderTop: '1px solid var(--border-color)' }} />
-        </div>
+        {import.meta.env.DEV && (
+          <>
+            <div className="login-divider"><span>ou teste no localhost</span></div>
 
-        {/* Formulário de Acesso de Demonstração (Demo) */}
-        <div
-          style={{
-            backgroundColor: 'var(--bg-primary)',
-            padding: '20px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)'
-          }}
-        >
-          <h4
-            style={{
-              fontSize: '13px',
-              fontWeight: 700,
-              marginBottom: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: 'var(--bg-dark)'
-            }}
-          >
-            <Play size={12} color="var(--primary)" /> Modo de Demonstração (Local)
-          </h4>
+            <div className="login-demo-card">
+              <div className="login-demo-heading">
+                <div className="login-demo-icon"><Database size={18} /></div>
+                <div>
+                  <strong>Acesso local de demonstração</strong>
+                  <span>10 pacientes fictícios, sem alterar o Supabase</span>
+                </div>
+              </div>
 
-          <div className="form-group">
-            <label>Escolha o Perfil de Teste</label>
-            <select
-              className="form-control"
-              value={demoRole}
-              onChange={(e) => setDemoRole(e.target.value)}
-              style={{ padding: '8px' }}
-            >
-              <option value="admin">Administrador (Acesso Total)</option>
-              <option value="recepcao">Recepção (Agenda & Cadastro)</option>
-              <option value="medico">Médico (Oftalmologista - Prontuários)</option>
-              <option value="vendedor">Vendedor (Ótica & Laboratório)</option>
-            </select>
-          </div>
+              <label htmlFor="demo-role" className="login-demo-label">Perfil para o teste</label>
+              <select
+                id="demo-role"
+                className="form-control"
+                value={demoRole}
+                onChange={(event) => setDemoRole(event.target.value)}
+              >
+                <option value="admin">Administrador — acesso completo</option>
+                <option value="recepcao">Recepção</option>
+                <option value="medico">Especialista</option>
+                <option value="vendedor">Óptica / OS</option>
+              </select>
 
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label>Selecione a Filial (Loja)</label>
-            <select
-              className="form-control"
-              value={selectedShop}
-              onChange={(e) => setSelectedShop(e.target.value)}
-              style={{ padding: '8px' }}
-            >
-              <option value="loja-1">Filial 1 - Centro</option>
-              <option value="loja-2">Filial 2 - Shopping</option>
-            </select>
-          </div>
-
-          <button
-            onClick={handleDemoLogin}
-            className="btn btn-secondary"
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px' }}
-          >
-            Simular Acesso Rápido
-          </button>
-        </div>
+              <button type="button" className="btn btn-secondary login-demo-button" onClick={handleDemoLogin}>
+                <Play size={16} fill="currentColor" /> Entrar no ambiente de teste
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
