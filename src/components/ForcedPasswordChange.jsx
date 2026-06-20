@@ -3,7 +3,9 @@ import { Eye, EyeOff, Glasses, KeyRound, Lock, LogOut } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 import { invokeAdminUsers } from '../utils/adminUsers';
 import { getAuthUserProfile } from '../utils/authUser';
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwords';
 import { supabase } from '../utils/supabaseClient';
+import { PasswordRequirements } from './PasswordRequirements';
 
 export const ForcedPasswordChange = () => {
   const { currentUser, setCurrentUser, logout } = useContext(AppContext);
@@ -18,8 +20,8 @@ export const ForcedPasswordChange = () => {
     event.preventDefault();
     setError('');
 
-    if (password.length < 8) {
-      setError('A nova senha deve ter pelo menos 8 caracteres.');
+    if (!isStrongPassword(password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
       return;
     }
     if (password !== confirmation) {
@@ -124,6 +126,8 @@ export const ForcedPasswordChange = () => {
               </button>
             </div>
           </div>
+
+          <PasswordRequirements password={password} confirmation={confirmation} />
 
           {error && <p className="password-recovery-error" role="alert">{error}</p>}
 

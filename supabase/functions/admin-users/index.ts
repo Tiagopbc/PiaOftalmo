@@ -4,6 +4,15 @@ const ALLOWED_ROLES = new Set(['admin', 'recepcao', 'medico', 'vendedor']);
 const ALLOWED_SHOPS = new Set(['all', 'loja-1', 'loja-2']);
 const LONG_BAN_DURATION = '876000h';
 const MINIMUM_ACTIVE_ADMINS = 2;
+const PASSWORD_POLICY_MESSAGE =
+  'Use pelo menos 8 caracteres, incluindo letra maiúscula, letra minúscula, número e símbolo.';
+
+const isStrongPassword = (password: string) =>
+  password.length >= 8 &&
+  /[A-Z]/.test(password) &&
+  /[a-z]/.test(password) &&
+  /[0-9]/.test(password) &&
+  /[!-/:-@[-`{-~]/.test(password);
 
 const jsonError = (message: string, status: number) =>
   Response.json({ error: message }, { status });
@@ -74,8 +83,8 @@ export default {
 
       if (action === 'complete-password-change') {
         const password = String(body.password || '');
-        if (password.length < 8) {
-          return jsonError('A nova senha deve ter pelo menos 8 caracteres.', 400);
+        if (!isStrongPassword(password)) {
+          return jsonError(PASSWORD_POLICY_MESSAGE, 400);
         }
         if (requester.app_metadata?.must_change_password !== true) {
           return jsonError('Essa conta não possui uma troca de senha pendente.', 400);
@@ -115,8 +124,8 @@ export default {
         const role = String(body.role || 'recepcao');
         const shopId = String(body.shopId || 'loja-1');
 
-        if (!name || !email || password.length < 8) {
-          return jsonError('Informe nome, e-mail e uma senha provisória com pelo menos 8 caracteres.', 400);
+        if (!name || !email || !isStrongPassword(password)) {
+          return jsonError(`Informe nome, e-mail e uma senha provisória válida. ${PASSWORD_POLICY_MESSAGE}`, 400);
         }
         if (!ALLOWED_ROLES.has(role) || !ALLOWED_SHOPS.has(shopId)) {
           return jsonError('Função ou filial inválida.', 400);
@@ -212,8 +221,8 @@ export default {
         const userId = String(body.userId || '');
         const temporaryPassword = String(body.temporaryPassword || '');
 
-        if (!userId || temporaryPassword.length < 8) {
-          return jsonError('Informe o usuário e uma senha temporária com pelo menos 8 caracteres.', 400);
+        if (!userId || !isStrongPassword(temporaryPassword)) {
+          return jsonError(`Informe o usuário e uma senha temporária válida. ${PASSWORD_POLICY_MESSAGE}`, 400);
         }
         if (userId === requester.id) {
           return jsonError('Use a troca de senha do próprio perfil para alterar sua conta.', 400);
