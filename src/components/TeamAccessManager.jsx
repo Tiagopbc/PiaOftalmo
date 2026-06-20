@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Copy,
+  KeyRound,
   RefreshCw,
   Save,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
   UserCheck,
   UserPlus,
   UserX
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../utils/supabaseClient';
 import { invokeAdminUsers } from '../utils/adminUsers';
+import { generateTemporaryPassword } from '../utils/passwords';
 import { StatePanel } from './StatePanel';
 import { StatusBadge } from './StatusBadge';
 
@@ -50,6 +55,14 @@ export const TeamAccessManager = ({ currentUser }) => {
   const [role, setRole] = useState('recepcao');
   const [shopId, setShopId] = useState('loja-1');
   const [creating, setCreating] = useState(false);
+  const [resetUserId, setResetUserId] = useState('');
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [resetCompleted, setResetCompleted] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState('');
+
+  const activeAdminCount = users.filter((user) =>
+    user.role === 'admin' && user.isActive
+  ).length;
 
   const loadUsers = useCallback(async () => {
     if (!canUseRemoteManagement) return;
@@ -125,7 +138,7 @@ export const TeamAccessManager = ({ currentUser }) => {
       setPassword('');
       setRole('recepcao');
       setShopId('loja-1');
-      setFeedback('Conta criada e liberada para acesso.');
+      setFeedback('Conta criada. A senha provisória deverá ser trocada no primeiro acesso.');
       await loadUsers();
     } catch (createError) {
       setError(createError.message);
@@ -189,6 +202,53 @@ export const TeamAccessManager = ({ currentUser }) => {
     }
   };
 
+  const openPasswordReset = (user) => {
+    setResetUserId(user.id);
+    setTemporaryPassword(generateTemporaryPassword());
+    setResetCompleted(false);
+    setCopyFeedback('');
+    setError('');
+    setFeedback('');
+  };
+
+  const closePasswordReset = () => {
+    setResetUserId('');
+    setTemporaryPassword('');
+    setResetCompleted(false);
+    setCopyFeedback('');
+  };
+
+  const handleResetPassword = async (event, user) => {
+    event.preventDefault();
+    setOperationUserId(user.id);
+    setError('');
+    setFeedback('');
+
+    try {
+      await invokeAdminUsers({
+        action: 'reset-password',
+        userId: user.id,
+        temporaryPassword
+      });
+      setResetCompleted(true);
+      setFeedback(`Senha temporária criada para ${user.name}.`);
+      await loadUsers();
+    } catch (resetError) {
+      setError(resetError.message);
+    } finally {
+      setOperationUserId('');
+    }
+  };
+
+  const handleCopyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(temporaryPassword);
+      setCopyFeedback('Senha copiada. Entregue-a diretamente ao colaborador.');
+    } catch {
+      setCopyFeedback('Não foi possível copiar automaticamente. Selecione a senha acima.');
+    }
+  };
+
   if (!canUseRemoteManagement) {
     return (
       <StatePanel
@@ -243,8 +303,8 @@ export const TeamAccessManager = ({ currentUser }) => {
               type="password"
               className="form-control"
               required
-              minLength={6}
-              placeholder="Mínimo de 6 caracteres"
+              minLength={8}
+              placeholder="Mínimo de 8 caracteres"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               disabled={creating}
@@ -311,6 +371,24 @@ export const TeamAccessManager = ({ currentUser }) => {
 
         {feedback && <div className="team-feedback" role="status">{feedback}</div>}
 
+        {!loading && users.length > 0 && (
+          <div className={`admin-coverage ${activeAdminCount >= 2 ? 'is-ready' : 'needs-backup'}`}>
+            {activeAdminCount >= 2 ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
+            <div>
+              <strong>
+                {activeAdminCount >= 2
+                  ? 'Cobertura administrativa protegida'
+                  : 'Cadastre um administrador de segurança'}
+              </strong>
+              <span>
+                {activeAdminCount >= 2
+                  ? `${activeAdminCount} administradores ativos. O sistema impedirá que esse número fique abaixo de dois.`
+                  : 'A equipe precisa de uma segunda conta administrativa para recuperar o acesso do administrador principal.'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {error && (
           <StatePanel
             type="error"
@@ -358,7 +436,10 @@ export const TeamAccessManager = ({ currentUser }) => {
 
                   <div className="team-user-meta">
                     <span>Último acesso: {formatAccessDate(user.lastSignInAt)}</span>
-                    {user.isSelf && <span className="team-self-label">Sua conta</span>}
+                    <div className="team-user-flags">
+                      {user.mustChangePassword && <span className="team-password-label">Troca de senha pendente</span>}
+                      {user.isSelf && <span className="team-self-label">Sua conta</span>}
+                    </div>
                   </div>
 
                   <div className="team-user-controls">
@@ -372,7 +453,17 @@ export const TeamAccessManager = ({ currentUser }) => {
                         disabled={isOperating || !user.isActive}
                       >
                         {ROLE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
+                          <option
+                            key={option.value}
+                            value={option.value}
+                            disabled={
+                              user.role === 'admin' &&
+                              activeAdminCount <= 2 &&
+                              option.value !== 'admin'
+                            }
+                          >
+                            {option.label}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -404,15 +495,98 @@ export const TeamAccessManager = ({ currentUser }) => {
                     </button>
                     <button
                       type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openPasswordReset(user)}
+                      disabled={isOperating || user.isSelf || !user.isActive}
+                      title={user.isSelf ? 'Altere sua própria senha pelo perfil' : undefined}
+                    >
+                      <KeyRound size={15} /> Redefinir senha
+                    </button>
+                    <button
+                      type="button"
                       className={`btn ${user.isActive ? 'btn-danger' : 'btn-success'} btn-sm`}
                       onClick={() => handleToggleAccess(user)}
-                      disabled={isOperating || user.isSelf}
-                      title={user.isSelf ? 'A própria conta não pode ser inativada' : undefined}
+                      disabled={
+                        isOperating ||
+                        user.isSelf ||
+                        (user.isActive && user.role === 'admin' && activeAdminCount <= 2)
+                      }
+                      title={
+                        user.isSelf
+                          ? 'A própria conta não pode ser inativada'
+                          : user.isActive && user.role === 'admin' && activeAdminCount <= 2
+                            ? 'Mantenha pelo menos dois administradores ativos'
+                            : undefined
+                      }
                     >
                       {user.isActive ? <UserX size={15} /> : <UserCheck size={15} />}
                       {user.isActive ? 'Inativar acesso' : 'Reativar acesso'}
                     </button>
                   </div>
+
+                  {resetUserId === user.id && (
+                    <form className="team-password-reset" onSubmit={(event) => handleResetPassword(event, user)}>
+                      <div className="team-password-reset-heading">
+                        <div>
+                          <strong>Senha temporária</strong>
+                          <span>
+                            {resetCompleted
+                              ? 'A senha já está ativa e deverá ser trocada no próximo acesso.'
+                              : 'Revise a senha e confirme a redefinição.'}
+                          </span>
+                        </div>
+                        <button type="button" className="icon-button" onClick={closePasswordReset} aria-label="Fechar redefinição de senha">
+                          ×
+                        </button>
+                      </div>
+
+                      <div className="team-password-field">
+                        <input
+                          type="text"
+                          className="form-control"
+                          aria-label={`Senha temporária de ${user.name}`}
+                          minLength={8}
+                          required
+                          value={temporaryPassword}
+                          onChange={(event) => {
+                            setTemporaryPassword(event.target.value);
+                            setResetCompleted(false);
+                            setCopyFeedback('');
+                          }}
+                          disabled={isOperating || resetCompleted}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setTemporaryPassword(generateTemporaryPassword());
+                            setResetCompleted(false);
+                            setCopyFeedback('');
+                          }}
+                          disabled={isOperating || resetCompleted}
+                        >
+                          Gerar outra
+                        </button>
+                      </div>
+
+                      {copyFeedback && <p className="team-copy-feedback" role="status">{copyFeedback}</p>}
+
+                      <div className="team-password-reset-actions">
+                        {resetCompleted ? (
+                          <button type="button" className="btn btn-primary btn-sm" onClick={handleCopyPassword}>
+                            <Copy size={15} /> Copiar senha temporária
+                          </button>
+                        ) : (
+                          <button type="submit" className="btn btn-primary btn-sm" disabled={isOperating || temporaryPassword.length < 8}>
+                            <KeyRound size={15} /> {isOperating ? 'Redefinindo...' : 'Aplicar senha temporária'}
+                          </button>
+                        )}
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={closePasswordReset} disabled={isOperating}>
+                          Fechar
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </article>
               );
             })}

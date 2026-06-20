@@ -1,7 +1,7 @@
 import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { User, Users, Building2, Save, Lock } from 'lucide-react';
+import { User, Users, Building2, Save, Lock, Eye, EyeOff } from 'lucide-react';
 import PageHeader from './PageHeader';
 import { TeamAccessManager } from './TeamAccessManager';
 
@@ -26,6 +26,9 @@ const SettingsManager = () => {
   // State para Personalização de Conta do Usuário
   const [profileName, setProfileName] = useState(currentUser?.name || '');
   const [newPasswordState, setNewPasswordState] = useState('');
+  const [confirmPasswordState, setConfirmPasswordState] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
@@ -64,8 +67,13 @@ const SettingsManager = () => {
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
-    if (newPasswordState.length < 6) {
-      alert('A senha deve ter pelo menos 6 caracteres!');
+    if (newPasswordState.length < 8) {
+      alert('A senha deve ter pelo menos 8 caracteres!');
+      return;
+    }
+
+    if (newPasswordState !== confirmPasswordState) {
+      alert('As senhas informadas não coincidem.');
       return;
     }
 
@@ -80,6 +88,9 @@ const SettingsManager = () => {
         if (error) throw error;
 
         setNewPasswordState('');
+        setConfirmPasswordState('');
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
         alert('Senha atualizada com sucesso!');
       } catch (err) {
         alert('Erro ao atualizar senha: ' + err.message);
@@ -310,16 +321,55 @@ const SettingsManager = () => {
 
               <form onSubmit={handleUpdatePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nova Senha*</label>
-                  <input
-                    type="password"
-                    className="form-control"
-                    value={newPasswordState}
-                    onChange={(e) => setNewPasswordState(e.target.value)}
-                    required
-                    placeholder="Mínimo 6 caracteres"
-                    minLength={6}
-                  />
+                  <label htmlFor="account-new-password" style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nova senha*</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      id="account-new-password"
+                      type={showNewPassword ? 'text' : 'password'}
+                      className="form-control"
+                      value={newPasswordState}
+                      onChange={(e) => setNewPasswordState(e.target.value)}
+                      required
+                      autoComplete="new-password"
+                      placeholder="Mínimo de 8 caracteres"
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      className="password-visibility-button"
+                      onClick={() => setShowNewPassword((visible) => !visible)}
+                      aria-label={showNewPassword ? 'Ocultar nova senha' : 'Mostrar nova senha'}
+                      aria-pressed={showNewPassword}
+                    >
+                      {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="account-confirm-password" style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Confirmar nova senha*</label>
+                  <div className="password-input-wrapper">
+                    <input
+                      id="account-confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      className="form-control"
+                      value={confirmPasswordState}
+                      onChange={(e) => setConfirmPasswordState(e.target.value)}
+                      required
+                      autoComplete="new-password"
+                      placeholder="Digite a mesma senha novamente"
+                      minLength={8}
+                    />
+                    <button
+                      type="button"
+                      className="password-visibility-button"
+                      onClick={() => setShowConfirmPassword((visible) => !visible)}
+                      aria-label={showConfirmPassword ? 'Ocultar confirmação de senha' : 'Mostrar confirmação de senha'}
+                      aria-pressed={showConfirmPassword}
+                    >
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
 
                 <button

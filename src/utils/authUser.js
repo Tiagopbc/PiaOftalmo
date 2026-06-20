@@ -11,6 +11,7 @@ export const getAuthUserProfile = (user) => {
     name,
     role,
     appRole: user?.app_metadata?.role || null,
-    shopId
+    shopId,
+    mustChangePassword: user?.app_metadata?.must_change_password === true
   };
 };

@@ -3,6 +3,7 @@ import { withSupabase } from 'npm:@supabase/server@^1';
 const ALLOWED_ROLES = new Set(['admin', 'recepcao', 'medico', 'vendedor']);
 const ALLOWED_SHOPS = new Set(['all', 'loja-1', 'loja-2']);
 const LONG_BAN_DURATION = '876000h';
+const MINIMUM_ACTIVE_ADMINS = 2;
 
 const jsonError = (message: string, status: number) =>
   Response.json({ error: message }, { status });
@@ -32,8 +33,30 @@ const serializeUser = (user: {
   isActive: isUserActive(user),
   createdAt: user.created_at,
   lastSignInAt: user.last_sign_in_at || null,
-  isSelf: user.id === requesterId
+  isSelf: user.id === requesterId,
+  mustChangePassword: user.app_metadata?.must_change_password === true
 });
+
+const canReduceAdminCoverage = async (
+  admin: {
+    listUsers: (params: { page: number; perPage: number }) => Promise<{
+      data: { users: Array<{
+        banned_until?: string | null;
+        app_metadata?: Record<string, unknown>;
+      }> };
+      error: Error | null;
+    }>;
+  }
+) => {
+  const { data, error } = await admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) throw error;
+
+  const activeAdmins = data.users.filter((user) =>
+    user.app_metadata?.role === 'admin' && isUserActive(user)
+  );
+
+  return activeAdmins.length > MINIMUM_ACTIVE_ADMINS;
+};
 
 export default {
   fetch: withSupabase({ auth: 'user' }, async (request, context) => {
@@ -45,13 +68,34 @@ export default {
         return jsonError('Sessão inválida ou expirada.', 401);
       }
 
-      if (requester.app_metadata?.role !== 'admin') {
-        return jsonError('Somente administradores podem gerenciar contas de acesso.', 403);
-      }
-
       const body = await request.json().catch(() => ({}));
       const action = String(body.action || 'list');
       const admin = context.supabaseAdmin.auth.admin;
+
+      if (action === 'complete-password-change') {
+        const password = String(body.password || '');
+        if (password.length < 8) {
+          return jsonError('A nova senha deve ter pelo menos 8 caracteres.', 400);
+        }
+        if (requester.app_metadata?.must_change_password !== true) {
+          return jsonError('Essa conta não possui uma troca de senha pendente.', 400);
+        }
+
+        const { data, error } = await admin.updateUserById(requester.id, {
+          password,
+          app_metadata: {
+            ...requester.app_metadata,
+            must_change_password: false
+          }
+        });
+        if (error || !data.user) throw error || new Error('Falha ao liberar a nova senha.');
+
+        return Response.json({ user: serializeUser(data.user, requester.id) });
+      }
+
+      if (requester.app_metadata?.role !== 'admin') {
+        return jsonError('Somente administradores podem gerenciar contas de acesso.', 403);
+      }
 
       if (action === 'list') {
         const { data, error } = await admin.listUsers({ page: 1, perPage: 1000 });
@@ -71,8 +115,8 @@ export default {
         const role = String(body.role || 'recepcao');
         const shopId = String(body.shopId || 'loja-1');
 
-        if (!name || !email || password.length < 6) {
-          return jsonError('Informe nome, e-mail e uma senha provisória com pelo menos 6 caracteres.', 400);
+        if (!name || !email || password.length < 8) {
+          return jsonError('Informe nome, e-mail e uma senha provisória com pelo menos 8 caracteres.', 400);
         }
         if (!ALLOWED_ROLES.has(role) || !ALLOWED_SHOPS.has(shopId)) {
           return jsonError('Função ou filial inválida.', 400);
@@ -83,7 +127,12 @@ export default {
           password,
           email_confirm: true,
           user_metadata: { name, role, shop_id: shopId },
-          app_metadata: { role, shop_id: shopId, is_active: true }
+          app_metadata: {
+            role,
+            shop_id: shopId,
+            is_active: true,
+            must_change_password: true
+          }
         });
         if (error) throw error;
 
@@ -108,6 +157,15 @@ export default {
         }
 
         const target = targetData.user;
+        if (
+          target.app_metadata?.role === 'admin' &&
+          role !== 'admin' &&
+          isUserActive(target) &&
+          !(await canReduceAdminCoverage(admin))
+        ) {
+          return jsonError('Mantenha pelo menos dois administradores ativos antes de alterar essa função.', 400);
+        }
+
         const { data, error } = await admin.updateUserById(userId, {
           user_metadata: { ...target.user_metadata, role, shop_id: shopId },
           app_metadata: { ...target.app_metadata, role, shop_id: shopId }
@@ -132,11 +190,52 @@ export default {
         }
 
         const target = targetData.user;
+        if (
+          !isActive &&
+          target.app_metadata?.role === 'admin' &&
+          isUserActive(target) &&
+          !(await canReduceAdminCoverage(admin))
+        ) {
+          return jsonError('Mantenha pelo menos dois administradores ativos antes de inativar essa conta.', 400);
+        }
+
         const { data, error } = await admin.updateUserById(userId, {
           ban_duration: isActive ? 'none' : LONG_BAN_DURATION,
           app_metadata: { ...target.app_metadata, is_active: isActive }
         });
         if (error || !data.user) throw error || new Error('Falha ao alterar acesso.');
+
+        return Response.json({ user: serializeUser(data.user, requester.id) });
+      }
+
+      if (action === 'reset-password') {
+        const userId = String(body.userId || '');
+        const temporaryPassword = String(body.temporaryPassword || '');
+
+        if (!userId || temporaryPassword.length < 8) {
+          return jsonError('Informe o usuário e uma senha temporária com pelo menos 8 caracteres.', 400);
+        }
+        if (userId === requester.id) {
+          return jsonError('Use a troca de senha do próprio perfil para alterar sua conta.', 400);
+        }
+
+        const { data: targetData, error: targetError } = await admin.getUserById(userId);
+        if (targetError || !targetData.user) {
+          return jsonError('Usuário não encontrado.', 404);
+        }
+        if (!isUserActive(targetData.user)) {
+          return jsonError('Reative o acesso antes de redefinir a senha.', 400);
+        }
+
+        const target = targetData.user;
+        const { data, error } = await admin.updateUserById(userId, {
+          password: temporaryPassword,
+          app_metadata: {
+            ...target.app_metadata,
+            must_change_password: true
+          }
+        });
+        if (error || !data.user) throw error || new Error('Falha ao redefinir a senha.');
 
         return Response.json({ user: serializeUser(data.user, requester.id) });
       }
