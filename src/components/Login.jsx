@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { getAuthUserProfile } from '../utils/authUser';
-import { Glasses, Lock, Mail, AlertCircle, Play, Database } from 'lucide-react';
+import { Glasses, Lock, Mail, AlertCircle, Play, Database, KeyRound, X } from 'lucide-react';
 
 const Login = () => {
   const { setCurrentUser } = useContext(AppContext);
@@ -11,6 +11,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [demoRole, setDemoRole] = useState('admin');
+  const [showAccessHelp, setShowAccessHelp] = useState(false);
 
   const handleDemoLogin = () => {
     const names = {
@@ -128,10 +129,11 @@ const Login = () => {
         {/* Formulário de Login Real (Supabase) */}
         <form onSubmit={handleRealLogin}>
           <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--text-main)' }}>
+            <label htmlFor="login-email" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--text-main)' }}>
               <Mail size={14} /> E-mail
             </label>
             <input
+              id="login-email"
               type="email"
               className="form-control"
               placeholder="seu-usuario@clinica.com"
@@ -143,10 +145,16 @@ const Login = () => {
           </div>
 
           <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: 'var(--text-main)' }}>
-              <Lock size={14} /> Senha
-            </label>
+            <div className="login-password-heading">
+              <label htmlFor="login-password">
+                <Lock size={14} /> Senha
+              </label>
+              <button type="button" className="login-forgot-button" onClick={() => setShowAccessHelp(true)}>
+                Esqueci minha senha
+              </button>
+            </div>
             <input
+              id="login-password"
               type="password"
               className="form-control"
               placeholder="••••••••"
@@ -166,6 +174,28 @@ const Login = () => {
             {loading ? 'Autenticando...' : 'Entrar no Sistema'}
           </button>
         </form>
+
+        {showAccessHelp && (
+          <section className="login-recovery-panel" aria-labelledby="access-help-title">
+            <div className="login-recovery-header">
+              <div>
+                <strong id="access-help-title"><KeyRound size={16} /> Solicitar nova senha</strong>
+                <span>O administrador criará uma senha temporária para sua conta.</span>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Fechar instruções de acesso"
+                onClick={() => setShowAccessHelp(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="login-access-help-text">
+              Entre em contato com um administrador da ótica. No próximo acesso, o sistema exigirá que você escolha uma senha pessoal.
+            </p>
+          </section>
+        )}
 
         {import.meta.env.DEV && (
           <>

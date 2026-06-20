@@ -26,4 +26,26 @@ describe('getAuthUserProfile', () => {
     expect(profile.role).toBe('recepcao');
     expect(profile.shopId).toBe('loja-1');
   });
+
+  it('exige a troca de senha somente quando app_metadata determina', () => {
+    const profile = getAuthUserProfile({
+      id: 'user-3',
+      email: 'temporario@clinica.com',
+      app_metadata: { must_change_password: true },
+      user_metadata: { must_change_password: false }
+    });
+
+    expect(profile.mustChangePassword).toBe(true);
+  });
+
+  it('não confia em user_metadata para liberar ou exigir troca de senha', () => {
+    const profile = getAuthUserProfile({
+      id: 'user-4',
+      email: 'usuario@clinica.com',
+      app_metadata: {},
+      user_metadata: { must_change_password: true }
+    });
+
+    expect(profile.mustChangePassword).toBe(false);
+  });
 });

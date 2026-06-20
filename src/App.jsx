@@ -1,6 +1,7 @@
 import { useContext, lazy, Suspense } from 'react';
 import { AppContext } from './context/AppContext';
 import Login from './components/Login';
+import { ForcedPasswordChange } from './components/ForcedPasswordChange';
 import { StatePanel } from './components/StatePanel';
 import { formatLabName } from './utils/helpers';
 
@@ -25,11 +26,24 @@ import {
 } from 'lucide-react';
 
 function App() {
-  const { currentUser, logout, activeTab, setActiveTab, activePrintData, clinicSettings, theme, toggleTheme } = useContext(AppContext);
+  const {
+    currentUser,
+    logout,
+    activeTab,
+    setActiveTab,
+    activePrintData,
+    clinicSettings,
+    theme,
+    toggleTheme
+  } = useContext(AppContext);
 
   // Se não estiver logado, exibe tela de login
   if (!currentUser) {
     return <Login />;
+  }
+
+  if (currentUser.mustChangePassword) {
+    return <ForcedPasswordChange />;
   }
 
   // Filtragem de abas de acordo com a Role do usuário
