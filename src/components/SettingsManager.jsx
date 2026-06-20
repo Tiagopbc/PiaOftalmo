@@ -2,7 +2,9 @@ import { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { User, Users, Building2, Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwords';
 import PageHeader from './PageHeader';
+import { PasswordRequirements } from './PasswordRequirements';
 import { TeamAccessManager } from './TeamAccessManager';
 
 const SettingsManager = () => {
@@ -67,8 +69,8 @@ const SettingsManager = () => {
 
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
-    if (newPasswordState.length < 8) {
-      alert('A senha deve ter pelo menos 8 caracteres!');
+    if (!isStrongPassword(newPasswordState)) {
+      alert(PASSWORD_POLICY_MESSAGE);
       return;
     }
 
@@ -371,6 +373,11 @@ const SettingsManager = () => {
                     </button>
                   </div>
                 </div>
+
+                <PasswordRequirements
+                  password={newPasswordState}
+                  confirmation={confirmPasswordState}
+                />
 
                 <button
                   type="submit"

@@ -171,4 +171,30 @@ describe('ForcedPasswordChange', () => {
     expect(screen.getByRole('alert').textContent).toBe('As senhas informadas não coincidem.');
     expect(mocks.invokeAdminUsers).not.toHaveBeenCalled();
   });
+
+  it('não envia uma senha que não atende todos os requisitos', () => {
+    render(
+      <AppContext.Provider value={{
+        currentUser: {
+          email: 'colaborador@clinica.com',
+          mustChangePassword: true
+        },
+        setCurrentUser: vi.fn(),
+        logout: vi.fn()
+      }}>
+        <ForcedPasswordChange />
+      </AppContext.Provider>
+    );
+
+    fireEvent.change(screen.getByLabelText('Nova senha'), {
+      target: { value: 'senhasimples' }
+    });
+    fireEvent.change(screen.getByLabelText('Confirmar nova senha'), {
+      target: { value: 'senhasimples' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar senha e entrar' }));
+
+    expect(screen.getByRole('alert').textContent).toContain('letra maiúscula');
+    expect(mocks.invokeAdminUsers).not.toHaveBeenCalled();
+  });
 });

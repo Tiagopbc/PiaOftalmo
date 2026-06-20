@@ -1208,6 +1208,46 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.55;
 }
 
+.password-requirements {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.password-requirements strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.password-requirements ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 7px 12px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.password-requirements li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.password-requirements li svg {
+  flex: 0 0 auto;
+}
+
+.password-requirements li.is-met {
+  color: var(--status-atendido-text);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

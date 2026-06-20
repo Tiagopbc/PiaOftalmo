@@ -13,7 +13,12 @@ import {
 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '../utils/supabaseClient';
 import { invokeAdminUsers } from '../utils/adminUsers';
-import { generateTemporaryPassword } from '../utils/passwords';
+import {
+  generateTemporaryPassword,
+  isStrongPassword,
+  PASSWORD_POLICY_MESSAGE
+} from '../utils/passwords';
+import { PasswordRequirements } from './PasswordRequirements';
 import { StatePanel } from './StatePanel';
 import { StatusBadge } from './StatusBadge';
 
@@ -120,9 +125,15 @@ export const TeamAccessManager = ({ currentUser }) => {
 
   const handleCreate = async (event) => {
     event.preventDefault();
-    setCreating(true);
     setError('');
     setFeedback('');
+
+    if (!isStrongPassword(password)) {
+      setError(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+
+    setCreating(true);
 
     try {
       await invokeAdminUsers({
@@ -220,9 +231,15 @@ export const TeamAccessManager = ({ currentUser }) => {
 
   const handleResetPassword = async (event, user) => {
     event.preventDefault();
-    setOperationUserId(user.id);
     setError('');
     setFeedback('');
+
+    if (!isStrongPassword(temporaryPassword)) {
+      setError(PASSWORD_POLICY_MESSAGE);
+      return;
+    }
+
+    setOperationUserId(user.id);
 
     try {
       await invokeAdminUsers({
@@ -310,6 +327,8 @@ export const TeamAccessManager = ({ currentUser }) => {
               disabled={creating}
             />
           </div>
+
+          <PasswordRequirements password={password} />
 
           <div className="team-form-grid">
             <div className="form-group">
@@ -569,6 +588,8 @@ export const TeamAccessManager = ({ currentUser }) => {
                         </button>
                       </div>
 
+                      <PasswordRequirements password={temporaryPassword} />
+
                       {copyFeedback && <p className="team-copy-feedback" role="status">{copyFeedback}</p>}
 
                       <div className="team-password-reset-actions">
@@ -577,7 +598,7 @@ export const TeamAccessManager = ({ currentUser }) => {
                             <Copy size={15} /> Copiar senha temporária
                           </button>
                         ) : (
-                          <button type="submit" className="btn btn-primary btn-sm" disabled={isOperating || temporaryPassword.length < 8}>
+                          <button type="submit" className="btn btn-primary btn-sm" disabled={isOperating || !isStrongPassword(temporaryPassword)}>
                             <KeyRound size={15} /> {isOperating ? 'Redefinindo...' : 'Aplicar senha temporária'}
                           </button>
                         )}

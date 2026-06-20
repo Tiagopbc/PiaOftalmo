@@ -10,10 +10,6 @@ vi.mock('../utils/adminUsers', () => ({
   invokeAdminUsers: mocks.invokeAdminUsers
 }));
 
-vi.mock('../utils/passwords', () => ({
-  generateTemporaryPassword: () => 'Temp#12345Aa'
-}));
-
 vi.mock('../utils/supabaseClient', () => ({
   isSupabaseConfigured: true,
   supabase: { auth: { refreshSession: vi.fn() } }
@@ -77,11 +73,16 @@ describe('TeamAccessManager', () => {
     fireEvent.click(within(userCard).getByRole('button', { name: 'Aplicar senha temporária' }));
 
     await waitFor(() => {
-      expect(mocks.invokeAdminUsers).toHaveBeenCalledWith({
-        action: 'reset-password',
-        userId: 'user-1',
-        temporaryPassword: 'Temp#12345Aa'
-      });
+      const resetCall = mocks.invokeAdminUsers.mock.calls.find(
+        ([payload]) => payload.action === 'reset-password'
+      );
+      expect(resetCall).toBeTruthy();
+      expect(resetCall[0].userId).toBe('user-1');
+      expect(resetCall[0].temporaryPassword).toHaveLength(16);
+      expect(resetCall[0].temporaryPassword).toMatch(/[A-Z]/);
+      expect(resetCall[0].temporaryPassword).toMatch(/[a-z]/);
+      expect(resetCall[0].temporaryPassword).toMatch(/[0-9]/);
+      expect(resetCall[0].temporaryPassword).toMatch(/[^A-Za-z0-9\s]/);
       expect(within(userCard).getByRole('button', { name: 'Copiar senha temporária' })).toBeTruthy();
     });
   });
