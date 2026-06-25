@@ -163,51 +163,63 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.optical_orders ENABLE ROW LEVEL SECURITY;
 
 -- patient_timeline_events
+DROP POLICY IF EXISTS "Acesso Timeline da filial" ON public.patient_timeline_events;
 CREATE POLICY "Acesso Timeline da filial" ON public.patient_timeline_events
     FOR ALL USING (public.user_has_shop_access(shop_id));
 
 -- prescriptions
+DROP POLICY IF EXISTS "Acesso Prescriptions da filial" ON public.prescriptions;
 CREATE POLICY "Acesso Prescriptions da filial" ON public.prescriptions
     FOR ALL USING (public.user_has_shop_access(shop_id));
 
 -- sales
+DROP POLICY IF EXISTS "Acesso Sales da filial" ON public.sales;
 CREATE POLICY "Acesso Sales da filial" ON public.sales
     FOR ALL USING (public.user_has_shop_access(shop_id));
 
 -- sale_items
+DROP POLICY IF EXISTS "Acesso Sale Items da filial" ON public.sale_items;
 CREATE POLICY "Acesso Sale Items da filial" ON public.sale_items
     FOR ALL USING (public.user_has_shop_access(shop_id));
 
 -- payments
+DROP POLICY IF EXISTS "Acesso Payments da filial" ON public.payments;
 CREATE POLICY "Acesso Payments da filial" ON public.payments
     FOR ALL USING (public.user_has_shop_access(shop_id));
 
 -- optical_orders
+DROP POLICY IF EXISTS "Acesso Optical Orders da filial" ON public.optical_orders;
 CREATE POLICY "Acesso Optical Orders da filial" ON public.optical_orders
     FOR ALL USING (public.user_has_shop_access(shop_id));
 
 -- 9. TRIGGERS DE AUDITORIA
 
+DROP TRIGGER IF EXISTS tr_audit_patient_timeline_events ON public.patient_timeline_events;
 CREATE TRIGGER tr_audit_patient_timeline_events
     AFTER INSERT OR UPDATE OR DELETE ON public.patient_timeline_events
     FOR EACH ROW EXECUTE FUNCTION public.process_audit_log();
 
+DROP TRIGGER IF EXISTS tr_audit_prescriptions ON public.prescriptions;
 CREATE TRIGGER tr_audit_prescriptions
     AFTER INSERT OR UPDATE OR DELETE ON public.prescriptions
     FOR EACH ROW EXECUTE FUNCTION public.process_audit_log();
 
+DROP TRIGGER IF EXISTS tr_audit_sales ON public.sales;
 CREATE TRIGGER tr_audit_sales
     AFTER INSERT OR UPDATE OR DELETE ON public.sales
     FOR EACH ROW EXECUTE FUNCTION public.process_audit_log();
 
+DROP TRIGGER IF EXISTS tr_audit_sale_items ON public.sale_items;
 CREATE TRIGGER tr_audit_sale_items
     AFTER INSERT OR UPDATE OR DELETE ON public.sale_items
     FOR EACH ROW EXECUTE FUNCTION public.process_audit_log();
 
+DROP TRIGGER IF EXISTS tr_audit_payments ON public.payments;
 CREATE TRIGGER tr_audit_payments
     AFTER INSERT OR UPDATE OR DELETE ON public.payments
     FOR EACH ROW EXECUTE FUNCTION public.process_audit_log();
 
+DROP TRIGGER IF EXISTS tr_audit_optical_orders ON public.optical_orders;
 CREATE TRIGGER tr_audit_optical_orders
     AFTER INSERT OR UPDATE OR DELETE ON public.optical_orders
     FOR EACH ROW EXECUTE FUNCTION public.process_audit_log();
