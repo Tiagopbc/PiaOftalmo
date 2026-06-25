@@ -113,7 +113,7 @@ const Dashboard = () => {
     .filter((app) => app.date === todayStr)
     .sort((first, second) => String(first.time).localeCompare(String(second.time)));
   const activeOS = activePatients.reduce((acc, p) => {
-    const pending = p.purchases.filter(
+    const pending = (p.purchases || []).filter(
       (pur) =>
         pur.status !== 'Entregue' &&
         pur.status !== 'Cancelado' &&
