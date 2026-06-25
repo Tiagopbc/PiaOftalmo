@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppContext } from '../context/AppContext';
+import { AuthContext } from '../context/AuthContext';
 import SettingsManager from './SettingsManager';
 
 const mocks = vi.hoisted(() => ({
@@ -17,26 +18,30 @@ vi.mock('../utils/supabaseClient', () => ({
 }));
 
 const renderSettings = () => render(
-  <AppContext.Provider value={{
+  <AuthContext.Provider value={{
     currentUser: {
       id: 'user-1',
       email: 'colaborador@clinica.com',
       name: 'Colaborador',
       role: 'recepcao',
-      shopId: 'loja-1',
+      appRole: 'recepcao',
+      shopId: 'shop-1',
       isDemo: false
     },
-    setCurrentUser: vi.fn(),
-    clinicSettings: {
-      name: 'PIA Oftalmo',
-      address: '',
-      cep: '',
-      phone: ''
-    },
-    updateClinicSettings: vi.fn()
+    setCurrentUser: vi.fn()
   }}>
-    <SettingsManager />
-  </AppContext.Provider>
+    <AppContext.Provider value={{
+      clinicSettings: {
+        name: 'Clínica Demo',
+        address: '',
+        cep: '',
+        phone: ''
+      },
+      updateClinicSettings: vi.fn()
+    }}>
+      <SettingsManager />
+    </AppContext.Provider>
+  </AuthContext.Provider>
 );
 
 describe('SettingsManager - alteração de senha', () => {

@@ -1,5 +1,8 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { saleService } from '../services/saleService';
+import { useAppointments } from '../context/AppointmentContext';
+import { useApp } from '../context/AppContext';
 import { DollarSign, AlertCircle, CheckSquare } from 'lucide-react';
 import { calculateCommission } from '../utils/helpers';
 import PageHeader from './PageHeader';
@@ -7,15 +10,21 @@ import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
 
 const FinanceManager = () => {
-  const {
-    currentUser,
-    patients,
-    appointments,
-    updatePurchaseStatus,
-    setActiveTab,
-    setSelectedPatientId,
-    professionals
-  } = useContext(AppContext);
+  const { currentUser } = useAuth();
+  const [sales, setSales] = useState([]);
+  useEffect(() => {
+    saleService.getAll().then(setSales).catch(console.error);
+  }, []);
+
+  const updatePurchaseStatus = async (patientId, purchaseId, status) => {
+    try {
+      await saleService.updateSaleStatus(purchaseId, status);
+      const newSales = await saleService.getAll();
+      setSales(newSales);
+    } catch(e) { console.error(e); }
+  };
+  const { appointments } = useAppointments();
+  const { setActiveTab, setSelectedPatientId, professionals } = useApp();
 
   const formatValue = (val) => {
     const num = Number(val);
@@ -35,14 +44,13 @@ const FinanceManager = () => {
   const PRIVATE_CONSULTATION_PRICE = 350.00;
   const INSURANCE_CONSULTATION_FEE = 120.00;
 
-  // Obter todas as compras/OS de todos os pacientes
-  const allPurchases = patients.flatMap((p) =>
-    (p.purchases || []).map((pur) => ({
-      ...pur,
-      patientName: p.name,
-      patientId: p.id
-    }))
-  );
+  const allPurchases = sales.map(s => ({
+    ...s,
+    value: s.totalAmount,
+    item: s.notes || 'Produto',
+    osNumber: s.notes || '-',
+    patientName: 'Paciente'
+  }));
 
   // Filtrar dados pela loja selecionada
   const filteredPurchases = allPurchases.filter((pur) => {

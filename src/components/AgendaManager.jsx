@@ -1,5 +1,9 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { usePatients } from '../context/PatientContext';
+import { useAppointments } from '../context/AppointmentContext';
+import { useWaitlist } from '../context/WaitlistContext';
+import { useApp } from '../context/AppContext';
 import { SERVICE_TYPES, PAYMENT_TYPES } from '../utils/mockData';
 import { timeToMinutes, isTimeInSlot, getTimeOptions } from '../utils/helpers';
 import PageHeader from './PageHeader';
@@ -17,18 +21,11 @@ import {
 } from 'lucide-react';
 
 const AgendaManager = () => {
-  const {
-    currentUser,
-    patients,
-    appointments,
-    waitlist,
-    professionals,
-    rooms,
-    addAppointment,
-    updateAppointmentStatus,
-    addWaitlist,
-    removeWaitlist
-  } = useContext(AppContext);
+  const { currentUser } = useAuth();
+  const { patients } = usePatients();
+  const { appointments, addAppointment, updateAppointmentStatus } = useAppointments();
+  const { waitlist, addWaitlist, removeWaitlist } = useWaitlist();
+  const { professionals, rooms } = useApp();
 
   const userShopId = currentUser?.shopId;
   const activePatients = patients.filter((patient) => patient.isActive !== false);

@@ -1,22 +1,19 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { usePatients } from '../context/PatientContext';
+import { useAppointments } from '../context/AppointmentContext';
+import { useWaitlist } from '../context/WaitlistContext';
+import { useApp } from '../context/AppContext';
 import { Users, Calendar, ShoppingBag, ListPlus, AlertTriangle, CheckCircle, XCircle, Clock, Glasses, ArrowRight } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
 
 const Dashboard = () => {
-  const {
-    currentUser,
-    patients,
-    appointments,
-    waitlist,
-    setActiveTab,
-    setSelectedPatientId,
-    updateAppointmentStatus,
-    removeWaitlist,
-    addWaitlist,
-    professionals
-  } = useContext(AppContext);
+  const { currentUser } = useAuth();
+  const { patients } = usePatients();
+  const { appointments, updateAppointmentStatus } = useAppointments();
+  const { waitlist, removeWaitlist, addWaitlist } = useWaitlist();
+  const { setActiveTab, setSelectedPatientId, professionals } = useApp();
 
   // States
   const [filterKey, setFilterKey] = useState('todos');

@@ -1,16 +1,64 @@
-# React + Vite
+# PIA Oftalmo
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de gestão integrado para clínicas oftalmológicas e óticas. O sistema unifica o controle de pacientes (prontuário, exames e receitas), agenda clínica, vendas de ótica (armações e lentes), ordens de serviço (laboratório) e controle financeiro.
 
-Currently, two official plugins are available:
+## Visão do Produto
+A PIA Oftalmo nasceu para simplificar o fluxo oftalmológico completo, desde a recepção do paciente até a entrega final dos óculos, permitindo uma gestão clara e com forte isolamento de acesso (RLS) para múltiplos perfis: Administradores, Recepcionistas, Médicos e Vendedores.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Módulos Atuais
+- **Pacientes**: Cadastro detalhado, histórico de anexos, alertas e linha do tempo clínica/administrativa.
+- **Agenda**: Controle de consultas por médico, data e status, além de fila de espera.
+- **Prontuário & Receitas**: Prescrições oftalmológicas estruturadas (longe/perto, DNP, tipo de lente).
+- **Ótica & OS**: Orçamentos, vendas diretas, geração e acompanhamento de Ordens de Serviço laboratoriais.
+- **Financeiro**: Visão consolidada de faturamento, comissões, e controle de pagamentos.
+- **Administração**: Gestão de usuários, papéis e configurações gerais.
 
-## React Compiler
+## Stack Tecnológica
+- **Frontend**: React.js + Vite
+- **Estilização**: Tailwind CSS (via Tailwind) + Lucide React (ícones)
+- **Backend / BaaS**: Supabase (PostgreSQL, Auth, RLS, Storage)
+- **CI/CD**: GitHub Actions + Cloudflare Pages (Deploy do Frontend)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 🛠 Guia de Instalação Local
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 1. Pré-requisitos
+- [Node.js](https://nodejs.org/) (versão 18+ recomendada)
+- Projeto no [Supabase](https://supabase.com/)
+
+### 2. Clonando o projeto
+```bash
+git clone https://github.com/Tiagopbc/PiaOftalmo.git
+cd PiaOftalmo
+```
+
+### 3. Variáveis de Ambiente
+Crie um arquivo `.env.local` na raiz do projeto copiando o exemplo:
+```bash
+cp .env.example .env.local
+```
+Preencha as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os dados do seu projeto no painel do Supabase (Settings -> API).
+
+### 4. Instalando dependências e rodando
+```bash
+npm install
+npm run dev
+```
+
+A aplicação estará disponível em `http://localhost:5173`.
+
+---
+
+## ☁️ Configuração do Supabase e Deploy
+
+### Supabase
+O banco de dados é inicializado usando os scripts presentes na raiz e as *migrations* oficiais da pasta `supabase/migrations`. 
+Certifique-se de habilitar e rodar o RLS (Row Level Security) para segurança.
+
+### Deploy
+A recomendação para o Frontend estático gerado pelo Vite é utilizar o **Cloudflare Pages**, por ser gratuito, ter suporte a roteamento SPA nativo e integração transparente com o GitHub.
+1. Conecte o repositório no painel do Cloudflare Pages.
+2. Build command: `npm run build`
+3. Build directory: `dist`
+4. Configure as mesmas variáveis de ambiente na aba "Settings > Environment variables".

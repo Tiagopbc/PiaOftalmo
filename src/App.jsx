@@ -1,5 +1,6 @@
-import { useContext, lazy, Suspense } from 'react';
-import { AppContext } from './context/AppContext';
+import { lazy, Suspense } from 'react';
+import { useApp } from './context/AppContext';
+import { useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import { ForcedPasswordChange } from './components/ForcedPasswordChange';
 import { StatePanel } from './components/StatePanel';
@@ -26,16 +27,15 @@ import {
 } from 'lucide-react';
 
 function App() {
+  const { currentUser, logout } = useAuth();
   const {
-    currentUser,
-    logout,
     activeTab,
     setActiveTab,
     activePrintData,
     clinicSettings,
     theme,
     toggleTheme
-  } = useContext(AppContext);
+  } = useApp();
 
   // Se não estiver logado, exibe tela de login
   if (!currentUser) {

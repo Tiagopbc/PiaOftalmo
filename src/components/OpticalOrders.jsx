@@ -1,26 +1,45 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { saleService } from '../services/saleService';
+
+import { useApp } from '../context/AppContext';
 import { Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer, FlaskConical } from 'lucide-react';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
 
 const OpticalOrders = () => {
-  const { currentUser, patients, updatePurchaseStatus, setActiveTab, setSelectedPatientId, setActivePrintData } = useContext(AppContext);
+  const { currentUser } = useAuth();
+  const [orders, setOrders] = useState([]);
+  
+  const loadOrders = async () => {
+    try {
+      const data = await saleService.getOpticalOrders();
+      setOrders(data);
+    } catch(e) { console.error(e); }
+  };
+  
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadOrders();
+  }, []);
+
+  const updatePurchaseStatus = async (patientId, purchaseId, status) => {
+    try {
+      await saleService.updateOpticalOrderStatus(purchaseId, status);
+      loadOrders();
+    } catch(e) { console.error(e); }
+  };
+  const { setActiveTab, setSelectedPatientId, setActivePrintData } = useApp();
 
   const triggerPrintOS = (order, printType = 'cliente') => {
-    const patientObj = patients.find(p => p.id === order.patientId);
-    const latestRx = patientObj && patientObj.prescriptions && patientObj.prescriptions.length > 0
-      ? patientObj.prescriptions[0]
-      : null;
-
     setActivePrintData({
       type: 'os',
       printType,
       data: order,
-      patientName: order.patientName,
-      patientCpf: patientObj ? patientObj.cpf : '',
-      rx: latestRx
+      patientName: order.patientName || 'Paciente',
+      patientCpf: order.patientCpf || '',
+      rx: null
     });
     // Dar tempo para o DOM renderizar
     setTimeout(() => {
@@ -32,14 +51,14 @@ const OpticalOrders = () => {
 
   const userShopId = currentUser?.shopId;
 
-  // Obter todas as ordens de serviço de todos os pacientes e filtrar pela loja ativa
-  const allOrders = patients.flatMap((p) =>
-    (p.purchases || []).map((pur) => ({
-      ...pur,
-      patientName: p.name,
-      patientId: p.id
-    }))
-  ).filter((order) => {
+  const allOrders = orders.map(o => ({
+    ...o,
+    osNumber: o.notes,
+    item: 'Óculos',
+    value: 0,
+    patientName: 'Paciente',
+    patientCpf: ''
+  })).filter((order) => {
     if (userShopId && userShopId !== 'all') {
       return !order.shop_id || order.shop_id === userShopId;
     }

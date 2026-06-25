@@ -1,12 +1,17 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '../context/AuthContext';
+import { usePatients } from '../context/PatientContext';
+import { useApp } from '../context/AppContext';
+import { patientService } from '../services/patientService';
+import { prescriptionService } from '../services/prescriptionService';
+import { saleService } from '../services/saleService';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
 import {
   Search,
   UserPlus,
-  User,
   Phone,
   FileText,
   AlertTriangle,
@@ -52,21 +57,21 @@ const formatPatientDate = (date) => {
 };
 
 const PatientManager = () => {
-  const {
-    currentUser,
-    patients,
-    selectedPatientId,
-    setSelectedPatientId,
-    addPatient,
-    updatePatient,
-    setPatientActiveStatus,
-    addPrescription,
-    addPurchase,
-    updatePurchaseStatus,
-    professionals,
-    setActivePrintData,
-    dataStatus
-  } = useContext(AppContext);
+  const { currentUser } = useAuth();
+  const { 
+    patients, 
+    addPatient, 
+    updatePatient, 
+    setPatientActiveStatus, 
+    loading 
+  } = usePatients();
+  const { 
+    selectedPatientId, 
+    setSelectedPatientId, 
+    professionals, 
+    setActivePrintData 
+  } = useApp();
+  const dataStatus = { loading, error: '' };
 
   const canManagePatientStatus = currentUser?.isDemo
     ? currentUser.role === 'admin'
@@ -88,8 +93,8 @@ const PatientManager = () => {
   };
 
   const triggerPrintOS = (purchase, printType = 'cliente') => {
-    const latestRx = selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0
-      ? selectedPatient.prescriptions[0]
+    const latestRx = patientPrescriptions && patientPrescriptions.length > 0
+      ? patientPrescriptions[0]
       : null;
 
     setActivePrintData({
@@ -194,6 +199,35 @@ const PatientManager = () => {
     filteredPatients[0] ||
     selectedPatientFromAll ||
     null;
+  
+  const [patientTimeline, setPatientTimeline] = useState([]);
+  const [patientPrescriptions, setPatientPrescriptions] = useState([]);
+  const [patientSales, setPatientSales] = useState([]);
+
+  const loadPatientData = async (id) => {
+    try {
+      const timeline = await patientService.getTimelineEvents(id);
+      const rx = await prescriptionService.getByPatient(id);
+      const sales = await saleService.getByPatient(id);
+      setPatientTimeline(timeline);
+      setPatientPrescriptions(rx);
+      setPatientSales(sales);
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedPatient?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadPatientData(selectedPatient.id);
+    } else {
+      setPatientTimeline([]);
+      setPatientPrescriptions([]);
+      setPatientSales([]);
+    }
+  }, [selectedPatient?.id]);
+
   const selectedPatientAge = getPatientAge(selectedPatient?.birthDate);
   const selectedLastEvent = getLastPatientEvent(selectedPatient);
 
@@ -229,7 +263,7 @@ const PatientManager = () => {
     if (!alertText.trim() || !selectedPatient) return;
 
     const newAlertObj = {
-      id: `a-${Date.now()}`,
+      id: `a-${uuidv4()}`,
       type: alertType,
       text: alertText,
       color: alertType === 'clinical' ? '#ef4444' : '#f59e0b'
@@ -240,13 +274,13 @@ const PatientManager = () => {
       alerts: [...(selectedPatient.alerts || []), newAlertObj],
       timeline: [
         {
-          id: `t-${Date.now()}`,
+          id: `t-${uuidv4()}`,
           date: new Date().toISOString().split('T')[0],
           type: 'system',
           title: `Alerta Adicionado (${alertType === 'clinical' ? 'Clínico' : 'Adm'})`,
           desc: alertText
         },
-        ...selectedPatient.timeline
+        ...patientTimeline
       ]
     };
 
@@ -263,43 +297,85 @@ const PatientManager = () => {
     updatePatient(updated);
   };
 
-  const handleAddRx = (e) => {
+  const handleAddRx = async (e) => {
     e.preventDefault();
     if (!selectedPatient) return;
-    addPrescription(selectedPatient.id, newRx);
-    setShowRxForm(false);
-    setNewRx({
-      doctor: professionals[0]?.name || '',
-      longe: {
-        od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
-        oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
-      },
-      perto: {
-        od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
-        oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
-      },
-      adicao: '',
-      lensTypes: {
-        antireflexo: false,
-        multifocal: false,
-        fotossensivel: false,
-        bluecontrol: false
-      },
-      lensType: '',
-      notes: ''
-    });
+    try {
+      await prescriptionService.create({
+        patientId: selectedPatient.id,
+        professionalId: professionals.find(p => p.name === newRx.doctor)?.id || null,
+        date: new Date().toISOString().split('T')[0],
+        notes: newRx.notes,
+        shop_id: selectedPatient.shop_id
+      });
+      await patientService.addTimelineEvent({
+        patientId: selectedPatient.id,
+        type: 'prescription',
+        title: 'Receita Oftalmológica Emitida',
+        description: `Emitida por Dr(a). ${newRx.doctor}.`,
+        shop_id: selectedPatient.shop_id,
+        date: new Date().toISOString().split('T')[0]
+      });
+      loadPatientData(selectedPatient.id);
+      
+      setShowRxForm(false);
+      setNewRx({
+        doctor: professionals[0]?.name || '',
+        longe: {
+          od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
+          oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
+        },
+        perto: {
+          od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
+          oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
+        },
+        adicao: '',
+        notes: ''
+      });
+    } catch(e) { console.error(e); }
   };
 
-  const handleAddPurchase = (e) => {
+  const handleAddPurchase = async (e) => {
     e.preventDefault();
     if (!selectedPatient || !newPurchase.item || !newPurchase.value) return;
-    const osNum = newPurchase.osNumber || `OS-${Math.floor(1000 + Math.random() * 9000)}`;
-    addPurchase(selectedPatient.id, {
-      ...newPurchase,
-      osNumber: osNum
-    });
-    setShowPurchaseForm(false);
-    setNewPurchase({ osNumber: '', item: '', value: '' });
+    
+    try {
+      const sale = await saleService.createSaleWithItems({
+        patientId: selectedPatient.id,
+        professionalId: currentUser?.id,
+        date: new Date().toISOString().split('T')[0],
+        totalAmount: parseFloat(newPurchase.value),
+        shop_id: selectedPatient.shop_id
+      }, [{
+        type: 'service',
+        description: newPurchase.item,
+        quantity: 1,
+        unitPrice: parseFloat(newPurchase.value),
+        totalPrice: parseFloat(newPurchase.value),
+        shop_id: selectedPatient.shop_id
+      }]);
+      
+      await saleService.createOpticalOrder({
+        saleId: sale.id,
+        patientId: selectedPatient.id,
+        status: 'producao',
+        notes: newPurchase.osNumber || `OS-${uuidv4().substring(0, 8)}`,
+        shop_id: selectedPatient.shop_id
+      });
+      
+      await patientService.addTimelineEvent({
+        patientId: selectedPatient.id,
+        type: 'purchase',
+        title: `Nova Venda/OS criada`,
+        description: `Item: ${newPurchase.item} - Valor: R$ ${parseFloat(newPurchase.value).toFixed(2)}.`,
+        shop_id: selectedPatient.shop_id,
+        date: new Date().toISOString().split('T')[0]
+      });
+      loadPatientData(selectedPatient.id);
+      
+      setShowPurchaseForm(false);
+      setNewPurchase({ osNumber: '', item: '', value: '' });
+    } catch(e) { console.error(e); }
   };
 
   const handleAddAttachment = (e) => {
@@ -307,7 +383,7 @@ const PatientManager = () => {
     if (!attachmentName.trim() || !selectedPatient) return;
 
     const newAtt = {
-      id: `att-${Date.now()}`,
+      id: `att-${uuidv4()}`,
       name: attachmentName,
       date: new Date().toISOString().split('T')[0],
       size: 'Simulado (KB)'
@@ -318,13 +394,13 @@ const PatientManager = () => {
       attachments: [...(selectedPatient.attachments || []), newAtt],
       timeline: [
         {
-          id: `t-${Date.now()}`,
+          id: `t-${uuidv4()}`,
           date: newAtt.date,
           type: 'system',
           title: 'Arquivo Anexado',
           desc: `Documento "${attachmentName}" anexado com sucesso.`
         },
-        ...selectedPatient.timeline
+        ...patientTimeline
       ]
     };
     updatePatient(updated);
@@ -863,10 +939,10 @@ const PatientManager = () => {
                   Linha do Tempo
                 </button>
                 <button type="button" aria-pressed={activeSubTab === 'rx'} className={`tab-btn ${activeSubTab === 'rx' ? 'active' : ''}`} onClick={() => setActiveSubTab('rx')}>
-                  Receitas ({selectedPatient.prescriptions?.length || 0})
+                  Receitas ({patientPrescriptions?.length || 0})
                 </button>
                 <button type="button" aria-pressed={activeSubTab === 'purchases'} className={`tab-btn ${activeSubTab === 'purchases' ? 'active' : ''}`} onClick={() => setActiveSubTab('purchases')}>
-                  Compras / OS ({selectedPatient.purchases?.length || 0})
+                  Compras / OS ({patientSales?.length || 0})
                 </button>
                 <button type="button" aria-pressed={activeSubTab === 'docs'} className={`tab-btn ${activeSubTab === 'docs' ? 'active' : ''}`} onClick={() => setActiveSubTab('docs')}>
                   Documentos ({selectedPatient.attachments?.length || 0})
@@ -878,8 +954,8 @@ const PatientManager = () => {
                 <div>
                   <h4 style={{ fontSize: '15px', marginBottom: '12px' }}>Linha do Tempo do Paciente</h4>
                   <div className="timeline-list">
-                    {selectedPatient.timeline && selectedPatient.timeline.length > 0 ? (
-                      selectedPatient.timeline.map((node) => (
+                    {patientTimeline && patientTimeline.length > 0 ? (
+                      patientTimeline.map((node) => (
                         <div key={node.id} className="timeline-node">
                           <div className={`timeline-dot ${node.type}`}></div>
                           <div className="timeline-content">
@@ -1006,8 +1082,8 @@ const PatientManager = () => {
                   )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {selectedPatient.prescriptions && selectedPatient.prescriptions.length > 0 ? (
-                      selectedPatient.prescriptions.map((rx) => (
+                    {patientPrescriptions && patientPrescriptions.length > 0 ? (
+                      patientPrescriptions.map((rx) => (
                         <div key={rx.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', alignItems: 'center' }}>
                             <strong>Dr(a). {rx.doctor}</strong>
@@ -1156,8 +1232,8 @@ const PatientManager = () => {
                   )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {selectedPatient.purchases && selectedPatient.purchases.length > 0 ? (
-                      selectedPatient.purchases.map((pur) => (
+                    {patientSales && patientSales.length > 0 ? (
+                      patientSales.map((pur) => (
                         <div key={pur.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1173,7 +1249,12 @@ const PatientManager = () => {
                             <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                               <select
                                 value={pur.status}
-                                onChange={(e) => updatePurchaseStatus(selectedPatient.id, pur.id, e.target.value)}
+                                onChange={async (e) => {
+                                  try {
+                                    await saleService.updateSaleStatus(pur.id, e.target.value);
+                                    loadPatientData(selectedPatient.id);
+                                  } catch(e) { console.error(e); }
+                                }}
                                 className="form-control"
                                 style={{ width: '130px', fontSize: '11px', padding: '4px' }}
                                 aria-label={`Alterar status da OS ${pur.osNumber}`}

@@ -1,11 +1,11 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { getAuthUserProfile } from '../utils/authUser';
 import { Glasses, Lock, Mail, AlertCircle, Play, Database, KeyRound, X } from 'lucide-react';
 
 const Login = () => {
-  const { setCurrentUser } = useContext(AppContext);
+  const { setCurrentUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

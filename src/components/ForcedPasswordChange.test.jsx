@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppContext } from '../context/AppContext';
+import { AuthContext } from '../context/AuthContext';
 import { ForcedPasswordChange } from './ForcedPasswordChange';
 
 const mocks = vi.hoisted(() => ({
@@ -46,7 +46,7 @@ describe('ForcedPasswordChange', () => {
     });
 
     render(
-      <AppContext.Provider value={{
+      <AuthContext.Provider value={{
         currentUser: {
           email: 'colaborador@clinica.com',
           mustChangePassword: true
@@ -55,7 +55,7 @@ describe('ForcedPasswordChange', () => {
         logout: vi.fn()
       }}>
         <ForcedPasswordChange />
-      </AppContext.Provider>
+      </AuthContext.Provider>
     );
 
     fireEvent.change(screen.getByLabelText('Nova senha'), {
@@ -90,7 +90,7 @@ describe('ForcedPasswordChange', () => {
     });
 
     render(
-      <AppContext.Provider value={{
+      <AuthContext.Provider value={{
         currentUser: {
           email: 'colaborador@clinica.com',
           mustChangePassword: true
@@ -99,7 +99,7 @@ describe('ForcedPasswordChange', () => {
         logout: vi.fn()
       }}>
         <ForcedPasswordChange />
-      </AppContext.Provider>
+      </AuthContext.Provider>
     );
 
     fireEvent.change(screen.getByLabelText('Nova senha'), {
@@ -119,7 +119,7 @@ describe('ForcedPasswordChange', () => {
 
   it('permite revelar os dois campos sem remover a proteção inicial', () => {
     render(
-      <AppContext.Provider value={{
+      <AuthContext.Provider value={{
         currentUser: {
           email: 'colaborador@clinica.com',
           mustChangePassword: true
@@ -128,7 +128,7 @@ describe('ForcedPasswordChange', () => {
         logout: vi.fn()
       }}>
         <ForcedPasswordChange />
-      </AppContext.Provider>
+      </AuthContext.Provider>
     );
 
     const passwordInput = screen.getByLabelText('Nova senha');
@@ -148,7 +148,7 @@ describe('ForcedPasswordChange', () => {
 
   it('não redefine a senha quando a confirmação estiver diferente', () => {
     render(
-      <AppContext.Provider value={{
+      <AuthContext.Provider value={{
         currentUser: {
           email: 'colaborador@clinica.com',
           mustChangePassword: true
@@ -157,7 +157,7 @@ describe('ForcedPasswordChange', () => {
         logout: vi.fn()
       }}>
         <ForcedPasswordChange />
-      </AppContext.Provider>
+      </AuthContext.Provider>
     );
 
     fireEvent.change(screen.getByLabelText('Nova senha'), {
@@ -174,7 +174,7 @@ describe('ForcedPasswordChange', () => {
 
   it('não envia uma senha que não atende todos os requisitos', () => {
     render(
-      <AppContext.Provider value={{
+      <AuthContext.Provider value={{
         currentUser: {
           email: 'colaborador@clinica.com',
           mustChangePassword: true
@@ -183,7 +183,7 @@ describe('ForcedPasswordChange', () => {
         logout: vi.fn()
       }}>
         <ForcedPasswordChange />
-      </AppContext.Provider>
+      </AuthContext.Provider>
     );
 
     fireEvent.change(screen.getByLabelText('Nova senha'), {

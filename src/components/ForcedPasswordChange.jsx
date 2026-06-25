@@ -1,6 +1,6 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { Eye, EyeOff, Glasses, KeyRound, Lock, LogOut } from 'lucide-react';
-import { AppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { invokeAdminUsers } from '../utils/adminUsers';
 import { getAuthUserProfile } from '../utils/authUser';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwords';
@@ -8,7 +8,7 @@ import { supabase } from '../utils/supabaseClient';
 import { PasswordRequirements } from './PasswordRequirements';
 
 export const ForcedPasswordChange = () => {
-  const { currentUser, setCurrentUser, logout } = useContext(AppContext);
+  const { currentUser, setCurrentUser, logout } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [showPassword, setShowPassword] = useState(false);

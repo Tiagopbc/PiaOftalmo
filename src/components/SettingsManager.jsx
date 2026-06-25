@@ -1,5 +1,6 @@
-import { useContext, useState } from 'react';
-import { AppContext } from '../context/AppContext';
+import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { User, Users, Building2, Save, Lock, Eye, EyeOff } from 'lucide-react';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwords';
@@ -8,12 +9,8 @@ import { PasswordRequirements } from './PasswordRequirements';
 import { TeamAccessManager } from './TeamAccessManager';
 
 const SettingsManager = () => {
-  const {
-    currentUser,
-    setCurrentUser,
-    clinicSettings,
-    updateClinicSettings
-  } = useContext(AppContext);
+  const { currentUser, setCurrentUser } = useAuth();
+  const { clinicSettings, updateClinicSettings } = useApp();
 
   const isAdmin = currentUser?.role === 'admin';
   const [activeSubTab, setActiveSubTab] = useState(() => isAdmin ? 'clinic' : 'account'); // clinic, team, account
