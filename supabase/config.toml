@@ -1,6 +1,8 @@
 [auth]
 minimum_password_length = 8
 password_requirements = "lower_upper_letters_digits_symbols"
+[auth.password]
+hibp_enabled = true
 
 [functions.admin-users]
 verify_jwt = true

@@ -80,7 +80,7 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- 4. APLICAÇÃO DO TRIGGER NAS TABELAS EXISTENTES
 -- Assumimos que patients, appointments e waitlist já existem conforme o seed.
@@ -125,36 +125,45 @@ BEGIN
         WHERE profile_id = auth.uid() AND shop_id = check_shop_id
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Políticas para patients
+DROP POLICY IF EXISTS "Usuários veem pacientes de suas filiais" ON public.patients;
 CREATE POLICY "Usuários veem pacientes de suas filiais" ON public.patients
 FOR SELECT USING (public.user_has_shop_access(shop_id::UUID));
 
+DROP POLICY IF EXISTS "Usuários criam pacientes em suas filiais" ON public.patients;
 CREATE POLICY "Usuários criam pacientes em suas filiais" ON public.patients
 FOR INSERT WITH CHECK (public.user_has_shop_access(shop_id::UUID));
 
+DROP POLICY IF EXISTS "Usuários atualizam pacientes de suas filiais" ON public.patients;
 CREATE POLICY "Usuários atualizam pacientes de suas filiais" ON public.patients
 FOR UPDATE USING (public.user_has_shop_access(shop_id::UUID));
 
 -- Políticas para appointments
+DROP POLICY IF EXISTS "Usuários veem agendamentos de suas filiais" ON public.appointments;
 CREATE POLICY "Usuários veem agendamentos de suas filiais" ON public.appointments
 FOR SELECT USING (public.user_has_shop_access(shop_id::UUID));
 
+DROP POLICY IF EXISTS "Usuários criam agendamentos em suas filiais" ON public.appointments;
 CREATE POLICY "Usuários criam agendamentos em suas filiais" ON public.appointments
 FOR INSERT WITH CHECK (public.user_has_shop_access(shop_id::UUID));
 
+DROP POLICY IF EXISTS "Usuários atualizam agendamentos de suas filiais" ON public.appointments;
 CREATE POLICY "Usuários atualizam agendamentos de suas filiais" ON public.appointments
 FOR UPDATE USING (public.user_has_shop_access(shop_id::UUID));
 
 -- Políticas para waitlist
+DROP POLICY IF EXISTS "Usuários veem fila de suas filiais" ON public.waitlist;
 CREATE POLICY "Usuários veem fila de suas filiais" ON public.waitlist
 FOR SELECT USING (public.user_has_shop_access(shop_id::UUID));
 
+DROP POLICY IF EXISTS "Usuários gerenciam fila em suas filiais" ON public.waitlist;
 CREATE POLICY "Usuários gerenciam fila em suas filiais" ON public.waitlist
 FOR ALL USING (public.user_has_shop_access(shop_id::UUID));
 
 -- Políticas para audit_logs
+DROP POLICY IF EXISTS "Admins leem todos logs, gerentes leem de sua filial" ON public.audit_logs;
 CREATE POLICY "Admins leem todos logs, gerentes leem de sua filial" ON public.audit_logs
 FOR SELECT USING (public.user_has_shop_access(shop_id));
 
