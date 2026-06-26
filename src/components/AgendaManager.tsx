@@ -735,7 +735,7 @@ const AgendaManager = () => {
                 <textarea
                   id="appointment-notes"
                   className="form-control"
-                  rows="2"
+                  rows={2}
                   value={newApp.notes}
                   onChange={(e) => setNewApp({ ...newApp, notes: e.target.value })}
                 ></textarea>

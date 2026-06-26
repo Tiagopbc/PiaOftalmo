@@ -3,7 +3,12 @@ import { useAuth } from '../context/AuthContext';
 import { Plus, Eye, Stethoscope, Activity, ClipboardList, X } from 'lucide-react';
 import { clinicalService } from '../services/clinicalService';
 
-export const ClinicalRecordTab = ({ patientId, triggerToast }) => {
+type ClinicalRecordTabProps = {
+  patientId: string;
+  triggerToast?: (message: string) => void;
+};
+
+export const ClinicalRecordTab = ({ patientId, triggerToast }: ClinicalRecordTabProps) => {
   const { currentUser } = useAuth();
   const [encounters, setEncounters] = useState([]);
   const [exams, setExams] = useState([]);
