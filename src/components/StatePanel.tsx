@@ -1,6 +1,24 @@
-import { Inbox, LoaderCircle, SearchX, TriangleAlert } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Inbox, LoaderCircle, SearchX, TriangleAlert, type LucideIcon } from 'lucide-react';
 
-const STATE_DEFAULTS = {
+type StatePanelType = 'empty' | 'search' | 'loading' | 'error';
+
+type StatePanelConfig = {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+};
+
+type StatePanelProps = {
+  type?: StatePanelType;
+  title?: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  compact?: boolean;
+  className?: string;
+};
+
+const STATE_DEFAULTS: Record<StatePanelType, StatePanelConfig> = {
   empty: {
     icon: Inbox,
     title: 'Nada por aqui ainda',
@@ -30,7 +48,7 @@ export const StatePanel = ({
   action,
   compact = false,
   className = ''
-}) => {
+}: StatePanelProps) => {
   const config = STATE_DEFAULTS[type] || STATE_DEFAULTS.empty;
   const Icon = config.icon;
   const isLoading = type === 'loading';

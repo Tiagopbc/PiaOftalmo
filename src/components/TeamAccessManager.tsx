@@ -124,7 +124,7 @@ export const TeamAccessManager = ({ currentUser }) => {
 
     try {
       const data = await invokeAdminUsers({ action: 'list' });
-      const nextUsers = data?.users || [];
+      const nextUsers = (data?.users || []) as any[];
       setUsers(nextUsers);
       setDrafts(Object.fromEntries(nextUsers.map((user) => [
         user.id,
@@ -144,7 +144,7 @@ export const TeamAccessManager = ({ currentUser }) => {
     invokeAdminUsers({ action: 'list' })
       .then((data) => {
         if (cancelled) return;
-        const nextUsers = data?.users || [];
+        const nextUsers = (data?.users || []) as any[];
         setUsers(nextUsers);
         setDrafts(Object.fromEntries(nextUsers.map((user) => [
           user.id,

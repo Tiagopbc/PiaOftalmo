@@ -63,7 +63,7 @@ const OpticalOrders = () => {
       return !order.shop_id || order.shop_id === userShopId;
     }
     return true;
-  }).sort((a, b) => new Date(b.date) - new Date(a.date));
+  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Filtrar ordens
   const filteredOrders = allOrders.filter((order) => {
@@ -188,7 +188,7 @@ const OpticalOrders = () => {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="table-empty">
+                  <td colSpan={7} className="table-empty">
                     <StatePanel
                       type={searchTerm || statusFilter !== 'all' ? 'search' : 'empty'}
                       title={searchTerm || statusFilter !== 'all'

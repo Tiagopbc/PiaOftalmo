@@ -288,7 +288,7 @@ function App() {
       </aside>
 
       {/* Main Content Pane */}
-      <main className="main-content" id="main-content" tabIndex="-1">
+      <main className="main-content" id="main-content" tabIndex={-1}>
         {/* Dynamic page component with lazy loading fallback */}
         <Suspense fallback={
           <StatePanel

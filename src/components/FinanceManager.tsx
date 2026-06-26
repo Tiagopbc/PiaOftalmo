@@ -368,7 +368,7 @@ const FinanceManager = () => {
                             <div>
                               <strong style={{ color: 'var(--text-title)' }}>{app.patientName}</strong>
                               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                Data: {new Date(app.date + 'T00:00:00').toLocaleDateString('pt-BR')} | Procedimento: {app.serviceName || app.serviceId}
+                                Data: {new Date(app.date + 'T00:00:00').toLocaleDateString('pt-BR')} | Procedimento: {(app as any).serviceName || app.serviceId}
                               </div>
                             </div>
                             <div style={{ textAlign: 'right' }}>

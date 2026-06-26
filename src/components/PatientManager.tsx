@@ -341,6 +341,13 @@ const PatientManager = () => {
           oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
         },
         adicao: '',
+        lensTypes: {
+          antireflexo: false,
+          multifocal: false,
+          fotossensivel: false,
+          bluecontrol: false
+        },
+        lensType: '',
         notes: ''
       });
     } catch(e) { console.error(e); }
@@ -805,7 +812,7 @@ const PatientManager = () => {
                 <label>Observações Clínicas / Internas</label>
                 <textarea
                   className="form-control"
-                  rows="3"
+                  rows={3}
                   value={newPatient.notes}
                   onChange={(e) => setNewPatient({ ...newPatient, notes: e.target.value })}
                 ></textarea>
@@ -1371,7 +1378,13 @@ const PatientManager = () => {
                       patientAttachments.map((doc) => (
                         <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)', fontSize: '13px' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {doc.is_confidential ? <Lock size={16} color="var(--danger)" title="Sigiloso" /> : <FileText size={16} color="var(--primary)" />}
+                            {doc.is_confidential ? (
+                              <span title="Sigiloso" aria-label="Documento sigiloso">
+                                <Lock size={16} color="var(--danger)" />
+                              </span>
+                            ) : (
+                              <FileText size={16} color="var(--primary)" aria-hidden="true" />
+                            )}
                             <strong>{doc.name}</strong>
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

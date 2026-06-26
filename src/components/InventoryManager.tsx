@@ -4,36 +4,49 @@ import { getInventoryItems, addInventoryItem, updateInventoryItem, adjustStock }
 import { Plus, Search, Edit2, PackagePlus, PackageMinus, AlertTriangle } from 'lucide-react';
 import PageHeader from './PageHeader';
 import { StatePanel } from './StatePanel';
+import type { InventoryItem } from '../types';
+
+type InventoryTransactionType = 'IN' | 'OUT' | 'ADJUST';
+
+type InventoryFormData = {
+  name: string;
+  sku: string;
+  category: string;
+  brand: string;
+  quantity: string;
+  minQuantity: string;
+  price: string;
+};
 
 const InventoryManager = () => {
   const { currentUser } = useAuth();
   const shopId = currentUser?.shopId;
 
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('Todas');
   
   // Modal states
   const [showItemModal, setShowItemModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   
   // Transaction Modal states
   const [showTxModal, setShowTxModal] = useState(false);
-  const [txType, setTxType] = useState('IN'); // IN or OUT
-  const [txTargetItem, setTxTargetItem] = useState(null);
-  const [txQuantity, setTxQuantity] = useState(1);
+  const [txType, setTxType] = useState<InventoryTransactionType>('IN'); // IN or OUT
+  const [txTargetItem, setTxTargetItem] = useState<InventoryItem | null>(null);
+  const [txQuantity, setTxQuantity] = useState('1');
   const [txNotes, setTxNotes] = useState('');
 
   // Form states
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<InventoryFormData>({
     name: '',
     sku: '',
     category: 'Armação',
     brand: '',
-    quantity: 0,
-    minQuantity: 5,
-    price: 0
+    quantity: '0',
+    minQuantity: '5',
+    price: '0'
   });
 
   const categories = ['Armação', 'Lente', 'Lente de Contato', 'Outros'];
@@ -57,7 +70,7 @@ const InventoryManager = () => {
     }
   }, [shopId, loadItems]);
 
-  const handleOpenModal = (item = null) => {
+  const handleOpenModal = (item: InventoryItem | null = null) => {
     if (item) {
       setEditingItem(item);
       setFormData({
@@ -65,9 +78,9 @@ const InventoryManager = () => {
         sku: item.sku || '',
         category: item.category,
         brand: item.brand || '',
-        quantity: item.quantity,
-        minQuantity: item.minQuantity,
-        price: item.price || 0
+        quantity: String(item.quantity),
+        minQuantity: String(item.minQuantity),
+        price: String(item.price || 0)
       });
     } else {
       setEditingItem(null);
@@ -76,9 +89,9 @@ const InventoryManager = () => {
         sku: '',
         category: 'Armação',
         brand: '',
-        quantity: 0,
-        minQuantity: 5,
-        price: 0
+        quantity: '0',
+        minQuantity: '5',
+        price: '0'
       });
     }
     setShowItemModal(true);
@@ -114,10 +127,10 @@ const InventoryManager = () => {
     }
   };
 
-  const handleOpenTransaction = (item, type) => {
+  const handleOpenTransaction = (item: InventoryItem, type: InventoryTransactionType) => {
     setTxTargetItem(item);
     setTxType(type);
-    setTxQuantity(1);
+    setTxQuantity('1');
     setTxNotes('');
     setShowTxModal(true);
   };
@@ -143,7 +156,13 @@ const InventoryManager = () => {
   });
 
   if (loading) {
-    return <StatePanel message="Carregando estoque..." />;
+    return (
+      <StatePanel
+        type="loading"
+        title="Carregando estoque"
+        description="Buscando produtos cadastrados."
+      />
+    );
   }
 
   return (
@@ -197,7 +216,7 @@ const InventoryManager = () => {
             <tbody>
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan="4" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     Nenhum produto encontrado.
                   </td>
                 </tr>
@@ -412,7 +431,7 @@ const InventoryManager = () => {
                   <label>Motivo / Observação</label>
                   <textarea
                     className="form-control"
-                    rows="3"
+                    rows={3}
                     placeholder={txType === 'IN' ? 'Ex: Compra de fornecedor (NF 123)' : 'Ex: Quebra / Venda Avulsa'}
                     value={txNotes}
                     onChange={e => setTxNotes(e.target.value)}
