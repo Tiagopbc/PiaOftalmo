@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getInventoryItems, addInventoryItem, updateInventoryItem, adjustStock } from '../services/inventoryService';
 import { Plus, Search, Edit2, PackagePlus, PackageMinus, AlertTriangle } from 'lucide-react';
@@ -97,8 +97,10 @@ const InventoryManager = () => {
     setShowItemModal(true);
   };
 
-  const handleSaveItem = async (e) => {
+  const handleSaveItem = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!shopId) return;
+
     try {
       if (editingItem) {
         await updateInventoryItem(editingItem.id, {
@@ -135,8 +137,10 @@ const InventoryManager = () => {
     setShowTxModal(true);
   };
 
-  const handleSaveTransaction = async (e) => {
+  const handleSaveTransaction = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!txTargetItem || !shopId || !currentUser) return;
+
     try {
       const qtyChange = txType === 'IN' ? Number(txQuantity) : -Number(txQuantity);
       await adjustStock(txTargetItem.id, shopId, qtyChange, txType, currentUser.id, txNotes);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ChangeEvent, type FormEvent } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../context/PatientContext';
@@ -29,8 +29,16 @@ import {
   Lock,
   Trash2
 } from 'lucide-react';
+import type { Patient, PatientAttachment } from '../types';
 
-const getPatientAge = (birthDate) => {
+type LegacyRecord = Record<string, any>;
+type PatientWithLegacyData = Patient & {
+  timeline?: LegacyRecord[];
+  alerts?: LegacyRecord[];
+};
+type PatientStatusFilter = 'active' | 'inactive' | 'all';
+
+const getPatientAge = (birthDate?: string) => {
   if (!birthDate) return null;
   const birth = new Date(`${birthDate}T12:00:00`);
   if (Number.isNaN(birth.getTime())) return null;
@@ -45,17 +53,17 @@ const getPatientAge = (birthDate) => {
   return age;
 };
 
-const getLastPatientEvent = (patient) => {
+const getLastPatientEvent = (patient?: PatientWithLegacyData | null) => {
   const events = patient?.timeline || [];
   if (events.length === 0) return null;
 
-  return events.reduce((latest, event) => {
+  return events.reduce<LegacyRecord | null>((latest, event) => {
     if (!latest) return event;
     return String(event.date || '') > String(latest.date || '') ? event : latest;
   }, null);
 };
 
-const formatPatientDate = (date) => {
+const formatPatientDate = (date?: string) => {
   if (!date) return 'Data não informada';
   const parsed = new Date(`${date}T12:00:00`);
   return Number.isNaN(parsed.getTime()) ? 'Data não informada' : parsed.toLocaleDateString('pt-BR');
@@ -80,7 +88,7 @@ const PatientManager = () => {
 
   const canManagePatientStatus = currentUser?.appRole === 'admin' || currentUser?.role === 'admin';
 
-  const triggerPrintRx = (rx) => {
+  const triggerPrintRx = (rx: LegacyRecord) => {
     setActivePrintData({
       type: 'rx',
       data: rx,
@@ -95,7 +103,7 @@ const PatientManager = () => {
     }, 150);
   };
 
-  const triggerPrintOS = (purchase, printType = 'cliente') => {
+  const triggerPrintOS = (purchase: LegacyRecord, printType = 'cliente') => {
     const latestRx = patientPrescriptions && patientPrescriptions.length > 0
       ? patientPrescriptions[0]
       : null;
@@ -118,7 +126,7 @@ const PatientManager = () => {
   };
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [patientStatusFilter, setPatientStatusFilter] = useState('active');
+  const [patientStatusFilter, setPatientStatusFilter] = useState<PatientStatusFilter>('active');
   const [showAddForm, setShowAddForm] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState('timeline'); // timeline, rx, purchases, docs
 
@@ -175,7 +183,7 @@ const PatientManager = () => {
   const [alertType, setAlertType] = useState('clinical');
 
   // Formulário de Anexo (simulado)
-  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isConfidential, setIsConfidential] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -203,14 +211,14 @@ const PatientManager = () => {
     filteredPatients.find((p) => p.id === selectedPatientId) ||
     filteredPatients[0] ||
     selectedPatientFromAll ||
-    null;
+    null as PatientWithLegacyData | null;
   
-  const [patientTimeline, setPatientTimeline] = useState([]);
-  const [patientPrescriptions, setPatientPrescriptions] = useState([]);
-  const [patientSales, setPatientSales] = useState([]);
-  const [patientAttachments, setPatientAttachments] = useState([]);
+  const [patientTimeline, setPatientTimeline] = useState<LegacyRecord[]>([]);
+  const [patientPrescriptions, setPatientPrescriptions] = useState<LegacyRecord[]>([]);
+  const [patientSales, setPatientSales] = useState<LegacyRecord[]>([]);
+  const [patientAttachments, setPatientAttachments] = useState<PatientAttachment[]>([]);
 
-  const loadPatientData = useCallback(async (id) => {
+  const loadPatientData = useCallback(async (id: string) => {
     try {
       const timeline = await patientService.getTimelineEvents(id);
       const rx = await prescriptionService.getByPatient(id);
@@ -242,7 +250,7 @@ const PatientManager = () => {
   const selectedPatientAge = getPatientAge(selectedPatient?.birthDate);
   const selectedLastEvent = getLastPatientEvent(selectedPatient);
 
-  const handleCreatePatient = async (e) => {
+  const handleCreatePatient = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newPatient.name || !newPatient.birthDate) {
       alert('Nome e Data de Nascimento são obrigatórios!');
@@ -269,7 +277,7 @@ const PatientManager = () => {
     });
   };
 
-  const handleAddAlert = (e) => {
+  const handleAddAlert = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!alertText.trim() || !selectedPatient) return;
 
@@ -299,16 +307,16 @@ const PatientManager = () => {
     setAlertText('');
   };
 
-  const handleRemoveAlert = (alertId) => {
+  const handleRemoveAlert = (alertId: string) => {
     if (!selectedPatient) return;
     const updated = {
       ...selectedPatient,
-      alerts: selectedPatient.alerts.filter((a) => a.id !== alertId)
+      alerts: (selectedPatient.alerts || []).filter((a) => a.id !== alertId)
     };
     updatePatient(updated);
   };
 
-  const handleAddRx = async (e) => {
+  const handleAddRx = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedPatient) return;
     try {
@@ -353,7 +361,7 @@ const PatientManager = () => {
     } catch(e) { console.error(e); }
   };
 
-  const handleAddPurchase = async (e) => {
+  const handleAddPurchase = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedPatient || !newPurchase.item || !newPurchase.value) return;
     
@@ -396,15 +404,20 @@ const PatientManager = () => {
     } catch(e) { console.error(e); }
   };
 
-  const handleAddAttachment = async (e) => {
+  const handleAddAttachment = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!uploadFile || !selectedPatient) return;
+    const attachmentShopId = selectedPatient.shop_id || currentUser?.shopId;
+    if (!attachmentShopId) {
+      alert('Não foi possível identificar a filial para anexar o arquivo.');
+      return;
+    }
 
     try {
       setUploading(true);
       await attachmentService.uploadAttachment(
         selectedPatient.id,
-        selectedPatient.shop_id || currentUser?.shopId,
+        attachmentShopId,
         uploadFile,
         isConfidential
       );
@@ -426,7 +439,7 @@ const PatientManager = () => {
     }
   };
 
-  const handleDownloadAttachment = async (doc) => {
+  const handleDownloadAttachment = async (doc: PatientAttachment) => {
     try {
       const url = await attachmentService.getSignedUrl(doc.storage_path);
       window.open(url, '_blank');
@@ -436,8 +449,10 @@ const PatientManager = () => {
     }
   };
 
-  const handleDeleteAttachment = async (doc) => {
+  const handleDeleteAttachment = async (doc: PatientAttachment) => {
     if (!confirm('Deseja excluir este anexo?')) return;
+    if (!selectedPatient) return;
+
     try {
       await attachmentService.deleteAttachment(doc.id, doc.storage_path);
       const atts = await attachmentService.getPatientAttachments(selectedPatient.id);
@@ -448,7 +463,7 @@ const PatientManager = () => {
     }
   };
 
-  const handlePatientStatusChange = async (patient, nextIsActive) => {
+  const handlePatientStatusChange = async (patient: Patient, nextIsActive: boolean) => {
     if (!canManagePatientStatus) {
       alert('Apenas administradores podem inativar ou reativar pacientes.');
       return;
@@ -470,7 +485,7 @@ const PatientManager = () => {
     }
   };
 
-  const handleStatusFilterChange = (status) => {
+  const handleStatusFilterChange = (status: PatientStatusFilter) => {
     setPatientStatusFilter(status);
     setSelectedPatientId(null);
     setShowAddForm(false);
@@ -1357,7 +1372,7 @@ const PatientManager = () => {
                       type="file"
                       className="form-control"
                       required
-                      onChange={(e) => setUploadFile(e.target.files[0])}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setUploadFile(e.target.files?.[0] || null)}
                       style={{ flex: 1, minWidth: '200px' }}
                     />
                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}>

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Building2, MapPin, Phone, Plus, Power, RefreshCw, Save, Store } from 'lucide-react';
 import { isSupabaseConfigured } from '../utils/supabaseClient';
-import { shopService } from '../services/shopService';
+import { shopService, type Shop } from '../services/shopService';
 import { StatePanel } from './StatePanel';
 import { StatusBadge } from './StatusBadge';
+import type { UserProfile } from '../types';
 
 const emptyForm = {
   name: '',
@@ -13,11 +14,19 @@ const emptyForm = {
   isActive: true
 };
 
-export const ShopManager = ({ currentUser }) => {
+type ShopForm = typeof emptyForm;
+type ShopManagerProps = {
+  currentUser: UserProfile | null;
+};
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'Erro inesperado.';
+
+export const ShopManager = ({ currentUser }: ShopManagerProps) => {
   const canManageShops =
     isSupabaseConfigured && currentUser?.role === 'admin';
 
-  const [shops, setShops] = useState([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [selectedShopId, setSelectedShopId] = useState('new');
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(canManageShops);
@@ -46,7 +55,7 @@ export const ShopManager = ({ currentUser }) => {
         setForm(emptyForm);
       }
     } catch (loadError) {
-      setError(loadError.message);
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
@@ -63,7 +72,7 @@ export const ShopManager = ({ currentUser }) => {
         setShops(data);
       })
       .catch((loadError) => {
-        if (!cancelled) setError(loadError.message);
+        if (!cancelled) setError(getErrorMessage(loadError));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -74,7 +83,7 @@ export const ShopManager = ({ currentUser }) => {
     };
   }, [canManageShops]);
 
-  const updateForm = (field, value) => {
+  const updateForm = (field: keyof ShopForm, value: ShopForm[keyof ShopForm]) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -85,7 +94,7 @@ export const ShopManager = ({ currentUser }) => {
     setError('');
   };
 
-  const startEdit = (shop) => {
+  const startEdit = (shop: Shop) => {
     setSelectedShopId(shop.id);
     setForm({
       name: shop.name || '',
@@ -98,7 +107,7 @@ export const ShopManager = ({ currentUser }) => {
     setError('');
   };
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setFeedback('');
@@ -136,7 +145,7 @@ export const ShopManager = ({ currentUser }) => {
       });
       await loadShops();
     } catch (saveError) {
-      setError(saveError.message);
+      setError(getErrorMessage(saveError));
     } finally {
       setSaving(false);
     }

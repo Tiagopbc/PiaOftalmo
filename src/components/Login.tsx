@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { getAuthUserProfile } from '../utils/authUser';
@@ -12,7 +12,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [showAccessHelp, setShowAccessHelp] = useState(false);
 
-  const handleRealLogin = async (e) => {
+  const handleRealLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!isSupabaseConfigured) {
       setError('Supabase não configurado! Verifique as credenciais no arquivo .env.local.');
@@ -33,7 +33,7 @@ const Login = () => {
       const profile = await getAuthUserProfile(data.user);
       setCurrentUser(profile);
     } catch (err) {
-      let errorMessage = err.message || 'Erro ao realizar login.';
+      let errorMessage = err instanceof Error ? err.message : 'Erro ao realizar login.';
       if (errorMessage === '{}' || typeof errorMessage !== 'string') {
         errorMessage = 'Erro de conexão ou serviço indisponível. Verifique sua internet ou bloqueadores de anúncios.';
       }

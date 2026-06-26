@@ -76,13 +76,19 @@ describe('TeamAccessManager', () => {
     render(
       <TeamAccessManager currentUser={{
         id: 'admin-1',
-        role: 'admin'
+        email: 'admin1@clinica.com',
+        name: 'Administrador Principal',
+        role: 'admin',
+        shopId: 'all'
       }} />
     );
 
     expect(await screen.findByText('Cobertura administrativa protegida')).toBeTruthy();
 
     const userCard = screen.getByText('Usuária Teste').closest('article');
+    expect(userCard).toBeTruthy();
+    if (!userCard) throw new Error('Card da usuária teste não encontrado.');
+
     fireEvent.click(within(userCard).getByRole('button', { name: 'Redefinir senha' }));
     fireEvent.click(within(userCard).getByRole('button', { name: 'Aplicar senha temporária' }));
 
@@ -91,6 +97,8 @@ describe('TeamAccessManager', () => {
         ([payload]) => payload.action === 'reset-password'
       );
       expect(resetCall).toBeTruthy();
+      if (!resetCall) throw new Error('Chamada de redefinição não encontrada.');
+
       expect(resetCall[0].userId).toBe('user-1');
       expect(resetCall[0].temporaryPassword).toHaveLength(16);
       expect(resetCall[0].temporaryPassword).toMatch(/[A-Z]/);

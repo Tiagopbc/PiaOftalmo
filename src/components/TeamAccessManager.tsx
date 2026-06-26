@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
   Copy,
   KeyRound,
@@ -18,7 +18,8 @@ import {
   isStrongPassword,
   PASSWORD_POLICY_MESSAGE
 } from '../utils/passwords';
-import { shopService } from '../services/shopService';
+import { shopService, type Shop } from '../services/shopService';
+import type { UserProfile } from '../types';
 import { PasswordRequirements } from './PasswordRequirements';
 import { StatePanel } from './StatePanel';
 import { StatusBadge } from './StatusBadge';
@@ -32,7 +33,44 @@ const ROLE_OPTIONS = [
 
 const ALL_SHOPS_OPTION = { value: 'all', label: 'Todas as Filiais' };
 
-const formatAccessDate = (value) => {
+type TeamUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  shopId: string;
+  shopName?: string;
+  isActive: boolean;
+  isSelf?: boolean;
+  mustChangePassword?: boolean;
+  lastSignInAt?: string | null;
+};
+
+type UserDraft = {
+  role: string;
+  shopId: string;
+};
+
+type DraftMap = Record<string, UserDraft>;
+
+type TeamAccessManagerProps = {
+  currentUser: UserProfile | null;
+};
+
+type AdminUsersListResponse = Record<string, unknown> & {
+  users?: TeamUser[];
+};
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'Não foi possível concluir a operação.';
+
+const createDrafts = (users: TeamUser[]): DraftMap =>
+  Object.fromEntries(users.map((user) => [
+    user.id,
+    { role: user.role, shopId: user.shopId }
+  ])) as DraftMap;
+
+const formatAccessDate = (value?: string | null) => {
   if (!value) return 'Nunca acessou';
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
@@ -40,14 +78,14 @@ const formatAccessDate = (value) => {
   }).format(new Date(value));
 };
 
-export const TeamAccessManager = ({ currentUser }) => {
+export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
   const canUseRemoteManagement =
     isSupabaseConfigured && Boolean(currentUser);
 
-  const [users, setUsers] = useState([]);
-  const [drafts, setDrafts] = useState({});
+  const [users, setUsers] = useState<TeamUser[]>([]);
+  const [drafts, setDrafts] = useState<DraftMap>({});
   const [loading, setLoading] = useState(canUseRemoteManagement);
-  const [shops, setShops] = useState([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [loadingShops, setLoadingShops] = useState(canUseRemoteManagement);
   const [operationUserId, setOperationUserId] = useState('');
   const [error, setError] = useState('');
@@ -72,12 +110,12 @@ export const TeamAccessManager = ({ currentUser }) => {
     return shops.find((shop) => shop.isActive)?.id || '';
   }, [shops]);
 
-  const getShopLabel = (shop) => {
+  const getShopLabel = (shop: Pick<Shop, 'name' | 'isActive'>) => {
     const inactiveLabel = shop.isActive ? '' : ' (inativa)';
     return `${shop.name}${inactiveLabel}`;
   };
 
-  const getShopOptionsForRole = (selectedRole, selectedShopId = '') => {
+  const getShopOptionsForRole = (selectedRole: string, selectedShopId = '') => {
     if (selectedRole === 'admin') return [ALL_SHOPS_OPTION];
 
     const activeShops = shops.filter((shop) => shop.isActive);
@@ -110,7 +148,7 @@ export const TeamAccessManager = ({ currentUser }) => {
       setShops(data);
       setShopId((currentShopId) => currentShopId || data.find((shop) => shop.isActive)?.id || '');
     } catch (loadError) {
-      setError(loadError.message);
+      setError(getErrorMessage(loadError));
     } finally {
       setLoadingShops(false);
     }
@@ -123,15 +161,12 @@ export const TeamAccessManager = ({ currentUser }) => {
     setError('');
 
     try {
-      const data = await invokeAdminUsers({ action: 'list' });
-      const nextUsers = (data?.users || []) as any[];
+      const data = await invokeAdminUsers<AdminUsersListResponse>({ action: 'list' });
+      const nextUsers = data.users || [];
       setUsers(nextUsers);
-      setDrafts(Object.fromEntries(nextUsers.map((user) => [
-        user.id,
-        { role: user.role, shopId: user.shopId }
-      ])));
+      setDrafts(createDrafts(nextUsers));
     } catch (loadError) {
-      setError(loadError.message);
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
@@ -141,18 +176,15 @@ export const TeamAccessManager = ({ currentUser }) => {
     if (!canUseRemoteManagement) return undefined;
 
     let cancelled = false;
-    invokeAdminUsers({ action: 'list' })
+    invokeAdminUsers<AdminUsersListResponse>({ action: 'list' })
       .then((data) => {
         if (cancelled) return;
-        const nextUsers = (data?.users || []) as any[];
+        const nextUsers = data.users || [];
         setUsers(nextUsers);
-        setDrafts(Object.fromEntries(nextUsers.map((user) => [
-          user.id,
-          { role: user.role, shopId: user.shopId }
-        ])));
+        setDrafts(createDrafts(nextUsers));
       })
       .catch((loadError) => {
-        if (!cancelled) setError(loadError.message);
+        if (!cancelled) setError(getErrorMessage(loadError));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -175,7 +207,7 @@ export const TeamAccessManager = ({ currentUser }) => {
         setShopId((currentShopId) => currentShopId || data.find((shop) => shop.isActive)?.id || '');
       })
       .catch((loadError) => {
-        if (!cancelled) setError(loadError.message);
+        if (!cancelled) setError(getErrorMessage(loadError));
       })
       .finally(() => {
         if (!cancelled) setLoadingShops(false);
@@ -186,14 +218,14 @@ export const TeamAccessManager = ({ currentUser }) => {
     };
   }, [canUseRemoteManagement]);
 
-  const updateDraft = (userId, field, value) => {
+  const updateDraft = (userId: string, field: keyof UserDraft, value: string) => {
     setDrafts((current) => ({
       ...current,
       [userId]: { ...current[userId], [field]: value }
     }));
   };
 
-  const updateDraftRole = (userId, value) => {
+  const updateDraftRole = (userId: string, value: string) => {
     setDrafts((current) => {
       const currentDraft = current[userId] || {};
       const nextShopId = value === 'admin'
@@ -213,7 +245,7 @@ export const TeamAccessManager = ({ currentUser }) => {
     });
   };
 
-  const handleCreateRoleChange = (value) => {
+  const handleCreateRoleChange = (value: string) => {
     setRole(value);
     setShopId(value === 'admin' ? 'all' : getDefaultShopId());
   };
@@ -222,7 +254,7 @@ export const TeamAccessManager = ({ currentUser }) => {
     await Promise.all([loadUsers(), loadShops()]);
   };
 
-  const handleCreate = async (event) => {
+  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setFeedback('');
@@ -256,13 +288,13 @@ export const TeamAccessManager = ({ currentUser }) => {
       setFeedback('Conta criada. A senha provisória deverá ser trocada no primeiro acesso.');
       await loadUsers();
     } catch (createError) {
-      setError(createError.message);
+      setError(getErrorMessage(createError));
     } finally {
       setCreating(false);
     }
   };
 
-  const handleSave = async (user) => {
+  const handleSave = async (user: TeamUser) => {
     const draft = drafts[user.id];
     if (!draft) return;
 
@@ -281,13 +313,13 @@ export const TeamAccessManager = ({ currentUser }) => {
       setFeedback(`Permissões de ${user.name} atualizadas.`);
       await loadUsers();
     } catch (saveError) {
-      setError(saveError.message);
+      setError(getErrorMessage(saveError));
     } finally {
       setOperationUserId('');
     }
   };
 
-  const handleToggleAccess = async (user) => {
+  const handleToggleAccess = async (user: TeamUser) => {
     const nextActive = !user.isActive;
     if (!nextActive) {
       const confirmed = window.confirm(
@@ -311,13 +343,13 @@ export const TeamAccessManager = ({ currentUser }) => {
         : `Acesso de ${user.name} inativado.`);
       await loadUsers();
     } catch (toggleError) {
-      setError(toggleError.message);
+      setError(getErrorMessage(toggleError));
     } finally {
       setOperationUserId('');
     }
   };
 
-  const openPasswordReset = (user) => {
+  const openPasswordReset = (user: TeamUser) => {
     setResetUserId(user.id);
     setTemporaryPassword(generateTemporaryPassword());
     setResetCompleted(false);
@@ -333,7 +365,7 @@ export const TeamAccessManager = ({ currentUser }) => {
     setCopyFeedback('');
   };
 
-  const handleResetPassword = async (event, user) => {
+  const handleResetPassword = async (event: FormEvent<HTMLFormElement>, user: TeamUser) => {
     event.preventDefault();
     setError('');
     setFeedback('');
@@ -355,7 +387,7 @@ export const TeamAccessManager = ({ currentUser }) => {
       setFeedback(`Senha temporária criada para ${user.name}.`);
       await loadUsers();
     } catch (resetError) {
-      setError(resetError.message);
+      setError(getErrorMessage(resetError));
     } finally {
       setOperationUserId('');
     }

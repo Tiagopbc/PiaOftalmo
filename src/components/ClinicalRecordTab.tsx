@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Eye, Stethoscope, Activity, ClipboardList, X } from 'lucide-react';
 import { clinicalService } from '../services/clinicalService';
+import type { ClinicalEncounter, ExamRecord } from '../types';
 
 type ClinicalRecordTabProps = {
   patientId: string;
@@ -10,14 +11,14 @@ type ClinicalRecordTabProps = {
 
 export const ClinicalRecordTab = ({ patientId, triggerToast }: ClinicalRecordTabProps) => {
   const { currentUser } = useAuth();
-  const [encounters, setEncounters] = useState([]);
-  const [exams, setExams] = useState([]);
+  const [encounters, setEncounters] = useState<ClinicalEncounter[]>([]);
+  const [exams, setExams] = useState<ExamRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
   const [showEncounterModal, setShowEncounterModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
-  const [viewEncounter, setViewEncounter] = useState(null);
+  const [viewEncounter, setViewEncounter] = useState<ClinicalEncounter | null>(null);
 
   // Form states
   const [anamnesis, setAnamnesis] = useState({ queixaPrincipal: '', historicoFamiliar: '', doencasSistemicas: '', medicamentos: '' });
@@ -60,13 +61,15 @@ export const ClinicalRecordTab = ({ patientId, triggerToast }: ClinicalRecordTab
     return () => window.clearTimeout(timeoutId);
   }, [loadClinicalData]);
 
-  const handleSaveEncounter = async (e) => {
+  const handleSaveEncounter = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!currentUser) return;
+
     try {
       await clinicalService.createEncounter({
         patient_id: patientId,
         professional_id: currentUser.id,
-        shop_id: currentUser.shopId === 'all' ? null : currentUser.shopId,
+        shop_id: currentUser.shopId === 'all' ? undefined : currentUser.shopId,
         anamnesis,
         visual_acuity: acuity,
         tonometry,
@@ -90,13 +93,15 @@ export const ClinicalRecordTab = ({ patientId, triggerToast }: ClinicalRecordTab
     }
   };
 
-  const handleSaveExam = async (e) => {
+  const handleSaveExam = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!currentUser) return;
+
     try {
       await clinicalService.createExam({
         patient_id: patientId,
         professional_id: currentUser.id,
-        shop_id: currentUser.shopId === 'all' ? null : currentUser.shopId,
+        shop_id: currentUser.shopId === 'all' ? undefined : currentUser.shopId,
         exam_type: examForm.exam_type,
         results: examForm.results,
         conclusion: examForm.conclusion

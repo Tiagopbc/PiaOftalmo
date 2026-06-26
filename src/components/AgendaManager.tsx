@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../context/PatientContext';
 import { useAppointments } from '../context/AppointmentContext';
@@ -57,7 +57,7 @@ const AgendaManager = () => {
     service: 'Consulta Geral'
   });
 
-  const [blockedSlots, setBlockedSlots] = useState([
+  const [blockedSlots, setBlockedSlots] = useState<Array<{ id: string; date: string; time: string; reason: string }>>([
     { id: 'b1', date: selectedDate, time: '12:00', reason: 'Intervalo de Almoço' }
   ]);
   const [blockTime, setBlockTime] = useState('12:00');
@@ -72,7 +72,7 @@ const AgendaManager = () => {
   ];
 
   // Adicionar bloqueio de horário
-  const handleAddBlock = (e) => {
+  const handleAddBlock = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!blockReason.trim()) return;
     setBlockedSlots((prev) => [
@@ -82,12 +82,12 @@ const AgendaManager = () => {
     setBlockReason('');
   };
 
-  const handleRemoveBlock = (id) => {
+  const handleRemoveBlock = (id: string) => {
     setBlockedSlots((prev) => prev.filter((b) => b.id !== id));
   };
 
   // Enviar agendamento
-  const handleScheduleSubmit = (e) => {
+  const handleScheduleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newApp.patientId) {
       alert('Por favor, selecione um paciente!');
@@ -153,7 +153,7 @@ const AgendaManager = () => {
   };
 
   // Fila de espera
-  const handleAddWaitlist = (e) => {
+  const handleAddWaitlist = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newWaitItem.patientName || !newWaitItem.phone) return;
     addWaitlist(newWaitItem);
