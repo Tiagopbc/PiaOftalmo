@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../context/AuthContext';
+import type { UserProfile } from '../types';
 import { ForcedPasswordChange } from './ForcedPasswordChange';
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +25,17 @@ vi.mock('../utils/supabaseClient', () => ({
 vi.mock('../utils/authUser', () => ({
   getAuthUserProfile: mocks.getAuthUserProfile
 }));
+
+const makeCurrentUser = (overrides: Partial<UserProfile> = {}): UserProfile => ({
+  id: 'user-1',
+  email: 'colaborador@clinica.com',
+  name: 'Colaborador',
+  role: 'recepcao',
+  appRole: 'recepcao',
+  shopId: 'loja-1',
+  mustChangePassword: true,
+  ...overrides
+});
 
 describe('ForcedPasswordChange', () => {
   beforeEach(() => {
@@ -63,10 +75,7 @@ describe('ForcedPasswordChange', () => {
 
     render(
       <AuthContext.Provider value={{
-        currentUser: {
-          email: 'colaborador@clinica.com',
-          mustChangePassword: true
-        },
+        currentUser: makeCurrentUser(),
         setCurrentUser,
         logout: vi.fn()
       }}>
@@ -108,11 +117,7 @@ describe('ForcedPasswordChange', () => {
 
     render(
       <AuthContext.Provider value={{
-        currentUser: {
-          id: 'user-1',
-          email: 'colaborador@clinica.com',
-          mustChangePassword: true
-        },
+        currentUser: makeCurrentUser(),
         setCurrentUser: vi.fn(),
         logout: vi.fn()
       }}>
@@ -138,10 +143,7 @@ describe('ForcedPasswordChange', () => {
   it('permite revelar os dois campos sem remover a proteção inicial', () => {
     render(
       <AuthContext.Provider value={{
-        currentUser: {
-          email: 'colaborador@clinica.com',
-          mustChangePassword: true
-        },
+        currentUser: makeCurrentUser(),
         setCurrentUser: vi.fn(),
         logout: vi.fn()
       }}>
@@ -149,8 +151,8 @@ describe('ForcedPasswordChange', () => {
       </AuthContext.Provider>
     );
 
-    const passwordInput = screen.getByLabelText('Nova senha');
-    const confirmationInput = screen.getByLabelText('Confirmar nova senha');
+    const passwordInput = screen.getByLabelText('Nova senha') as HTMLInputElement;
+    const confirmationInput = screen.getByLabelText('Confirmar nova senha') as HTMLInputElement;
 
     expect(passwordInput.type).toBe('password');
     expect(confirmationInput.type).toBe('password');
@@ -167,10 +169,7 @@ describe('ForcedPasswordChange', () => {
   it('não redefine a senha quando a confirmação estiver diferente', () => {
     render(
       <AuthContext.Provider value={{
-        currentUser: {
-          email: 'colaborador@clinica.com',
-          mustChangePassword: true
-        },
+        currentUser: makeCurrentUser(),
         setCurrentUser: vi.fn(),
         logout: vi.fn()
       }}>
@@ -193,10 +192,7 @@ describe('ForcedPasswordChange', () => {
   it('não envia uma senha que não atende todos os requisitos', () => {
     render(
       <AuthContext.Provider value={{
-        currentUser: {
-          email: 'colaborador@clinica.com',
-          mustChangePassword: true
-        },
+        currentUser: makeCurrentUser(),
         setCurrentUser: vi.fn(),
         logout: vi.fn()
       }}>

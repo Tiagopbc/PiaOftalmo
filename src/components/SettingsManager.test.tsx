@@ -27,16 +27,27 @@ const renderSettings = () => render(
       appRole: 'recepcao',
       shopId: 'shop-1'
     },
-    setCurrentUser: vi.fn()
+    setCurrentUser: vi.fn(),
+    logout: vi.fn()
   }}>
     <AppContext.Provider value={{
+      activeTab: 'settings',
+      setActiveTab: vi.fn(),
+      selectedPatientId: null,
+      setSelectedPatientId: vi.fn(),
+      activePrintData: null,
+      setActivePrintData: vi.fn(),
       clinicSettings: {
         name: 'Clínica Demo',
         address: '',
         cep: '',
         phone: ''
       },
-      updateClinicSettings: vi.fn()
+      updateClinicSettings: vi.fn(),
+      theme: 'light',
+      toggleTheme: vi.fn(),
+      professionals: [],
+      rooms: []
     }}>
       <SettingsManager />
     </AppContext.Provider>
@@ -57,8 +68,8 @@ describe('SettingsManager - alteração de senha', () => {
   it('exige confirmação e permite visualizar os dois campos', async () => {
     renderSettings();
 
-    const passwordInput = screen.getByLabelText('Nova senha*');
-    const confirmationInput = screen.getByLabelText('Confirmar nova senha*');
+    const passwordInput = screen.getByLabelText('Nova senha*') as HTMLInputElement;
+    const confirmationInput = screen.getByLabelText('Confirmar nova senha*') as HTMLInputElement;
 
     fireEvent.change(passwordInput, { target: { value: 'NovaSenha#123' } });
     fireEvent.change(confirmationInput, { target: { value: 'OutraSenha#456' } });
