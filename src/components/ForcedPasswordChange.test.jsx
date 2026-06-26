@@ -5,7 +5,8 @@ import { ForcedPasswordChange } from './ForcedPasswordChange';
 
 const mocks = vi.hoisted(() => ({
   invokeAdminUsers: vi.fn(),
-  signInWithPassword: vi.fn()
+  signInWithPassword: vi.fn(),
+  getAuthUserProfile: vi.fn()
 }));
 
 vi.mock('../utils/adminUsers', () => ({
@@ -20,29 +21,44 @@ vi.mock('../utils/supabaseClient', () => ({
   }
 }));
 
+vi.mock('../utils/authUser', () => ({
+  getAuthUserProfile: mocks.getAuthUserProfile
+}));
+
 describe('ForcedPasswordChange', () => {
   beforeEach(() => {
     mocks.invokeAdminUsers.mockReset();
     mocks.signInWithPassword.mockReset();
+    mocks.getAuthUserProfile.mockReset();
   });
 
   it('troca a senha pela Edge Function e libera a sessão atualizada', async () => {
     const setCurrentUser = vi.fn();
     mocks.invokeAdminUsers.mockResolvedValue({});
+    const revalidatedUser = {
+      id: 'user-1',
+      email: 'colaborador@clinica.com',
+      app_metadata: {
+        role: 'recepcao',
+        shop_id: 'loja-1',
+        must_change_password: false
+      },
+      user_metadata: { name: 'Colaborador' }
+    };
     mocks.signInWithPassword.mockResolvedValue({
       data: {
-        user: {
-          id: 'user-1',
-          email: 'colaborador@clinica.com',
-          app_metadata: {
-            role: 'recepcao',
-            shop_id: 'loja-1',
-            must_change_password: false
-          },
-          user_metadata: { name: 'Colaborador' }
-        }
+        user: revalidatedUser
       },
       error: null
+    });
+    mocks.getAuthUserProfile.mockResolvedValue({
+      id: 'user-1',
+      email: 'colaborador@clinica.com',
+      name: 'Colaborador',
+      role: 'recepcao',
+      appRole: 'recepcao',
+      shopId: 'loja-1',
+      mustChangePassword: false
     });
 
     render(
@@ -75,6 +91,7 @@ describe('ForcedPasswordChange', () => {
         email: 'colaborador@clinica.com',
         password: 'NovaSenha#123'
       });
+      expect(mocks.getAuthUserProfile).toHaveBeenCalledWith(revalidatedUser);
       expect(setCurrentUser).toHaveBeenCalledWith(expect.objectContaining({
         mustChangePassword: false,
         role: 'recepcao'
@@ -92,6 +109,7 @@ describe('ForcedPasswordChange', () => {
     render(
       <AuthContext.Provider value={{
         currentUser: {
+          id: 'user-1',
           email: 'colaborador@clinica.com',
           mustChangePassword: true
         },

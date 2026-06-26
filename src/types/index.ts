@@ -59,8 +59,10 @@ export interface UserProfile {
   name: string;
   role: string;
   shopId: string;
-  isDemo: boolean;
+  shopName?: string;
+  shopCode?: string;
   appRole?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface PatientTimelineEvent {
@@ -140,4 +142,106 @@ export interface OpticalOrder {
   notes?: string;
   shop_id?: string;
   createdAt: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  shop_id?: string;
+  name: string;
+  sku?: string;
+  category: string;
+  brand?: string;
+  quantity: number;
+  minQuantity: number;
+  price?: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  itemId: string;
+  shop_id?: string;
+  type: string;
+  quantity: number;
+  date: string;
+  professionalId?: string;
+  notes?: string;
+}
+
+export interface Anamnesis {
+  queixaPrincipal?: string;
+  historicoFamiliar?: string;
+  doencasSistemicas?: string;
+  medicamentos?: string;
+}
+
+export interface VisualAcuity {
+  od_cc?: string;
+  od_sc?: string;
+  oe_cc?: string;
+  oe_sc?: string;
+}
+
+export interface Tonometry {
+  od_pressure?: string;
+  oe_pressure?: string;
+  time?: string;
+}
+
+export interface RefractionData {
+  od_sph?: string;
+  od_cyl?: string;
+  od_axis?: string;
+  oe_sph?: string;
+  oe_cyl?: string;
+  oe_axis?: string;
+  add?: string;
+}
+
+export interface Diagnosis {
+  cid?: string;
+  conduta?: string;
+  obs_gerais?: string;
+}
+
+export interface ClinicalEncounter {
+  id: string;
+  patient_id: string;
+  professional_id?: string;
+  date: string;
+  shop_id?: string;
+  anamnesis: Anamnesis;
+  visual_acuity: VisualAcuity;
+  tonometry: Tonometry;
+  refraction: RefractionData;
+  diagnosis: Diagnosis;
+  created_at: string;
+}
+
+export interface ExamRecord {
+  id: string;
+  patient_id: string;
+  professional_id?: string;
+  encounter_id?: string;
+  date: string;
+  shop_id?: string;
+  exam_type: string;
+  results?: string;
+  conclusion?: string;
+  created_at: string;
+}
+
+export interface PatientAttachment {
+  id: string;
+  patient_id: string;
+  shop_id: string;
+  uploader_id: string;
+  name: string;
+  storage_path: string;
+  file_type: string;
+  size_bytes: number;
+  is_confidential: boolean;
+  created_at: string;
 }

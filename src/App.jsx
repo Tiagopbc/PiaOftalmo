@@ -1,10 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useApp } from './context/AppContext';
 import { useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import { ForcedPasswordChange } from './components/ForcedPasswordChange';
 import { StatePanel } from './components/StatePanel';
 import { formatLabName } from './utils/helpers';
+import { getShopDisplayName } from './utils/shops';
 
 // Lazy loading component tabs for bundle optimization
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -13,6 +14,7 @@ const AgendaManager = lazy(() => import('./components/AgendaManager'));
 const OpticalOrders = lazy(() => import('./components/OpticalOrders'));
 const FinanceManager = lazy(() => import('./components/FinanceManager'));
 const SettingsManager = lazy(() => import('./components/SettingsManager'));
+const InventoryManager = lazy(() => import('./components/InventoryManager'));
 import {
   LayoutDashboard,
   Users,
@@ -23,7 +25,8 @@ import {
   Store,
   Settings,
   Sun,
-  Moon
+  Moon,
+  Package
 } from 'lucide-react';
 
 function App() {
@@ -37,18 +40,11 @@ function App() {
     toggleTheme
   } = useApp();
 
-  // Se não estiver logado, exibe tela de login
-  if (!currentUser) {
-    return <Login />;
-  }
-
-  if (currentUser.mustChangePassword) {
-    return <ForcedPasswordChange />;
-  }
-
   // Filtragem de abas de acordo com a Role do usuário
   const getNavItems = () => {
-    const role = currentUser.role;
+    const role = currentUser?.role;
+    if (!role) return [];
+
     const items = [
       { id: 'dashboard', label: 'Painel Geral', icon: <LayoutDashboard size={20} /> }
     ];
@@ -66,6 +62,7 @@ function App() {
 
     if (role === 'admin' || role === 'vendedor') {
       items.push({ id: 'optical', label: 'Óptica & OS', icon: <Glasses size={20} /> });
+      items.push({ id: 'inventory', label: 'Estoque', icon: <Package size={20} /> });
     }
 
     if (role === 'admin') {
@@ -81,10 +78,20 @@ function App() {
 
   const navItems = getNavItems();
 
-  // Validar se a aba atual está disponível para a role. Se não, redireciona para dashboard
-  const isTabAllowed = navItems.some(item => item.id === activeTab);
-  if (!isTabAllowed) {
-    setActiveTab('dashboard');
+  const isTabAllowed = navItems.some((item) => item.id === activeTab);
+  useEffect(() => {
+    if (currentUser && !isTabAllowed) {
+      setActiveTab('dashboard');
+    }
+  }, [currentUser, isTabAllowed, setActiveTab]);
+
+  // Se não estiver logado, exibe tela de login
+  if (!currentUser) {
+    return <Login />;
+  }
+
+  if (currentUser.mustChangePassword) {
+    return <ForcedPasswordChange />;
   }
 
   const renderActiveTab = () => {
@@ -99,6 +106,8 @@ function App() {
         return <OpticalOrders />;
       case 'finance':
         return <FinanceManager />;
+      case 'inventory':
+        return <InventoryManager />;
       case 'settings':
         return <SettingsManager />;
       default:
@@ -106,11 +115,11 @@ function App() {
     }
   };
 
-  const getShopName = (shopId) => {
-    if (shopId === 'loja-1') return 'Filial 1 - Centro';
-    if (shopId === 'loja-2') return 'Filial 2 - Shopping';
-    return 'Todas as Filiais';
-  };
+  const getShopName = (shopId, shopName) => getShopDisplayName(shopId, shopName);
+  const getPrintShopName = (shopId, shopName) => getShopDisplayName(
+    shopId,
+    shopName || (shopId === currentUser.shopId ? currentUser.shopName : undefined)
+  );
 
   const getRoleBadge = (role) => {
     switch (role) {
@@ -135,7 +144,7 @@ function App() {
           <div className="logo-text">
             <h1>PIA Oftalmo</h1>
             <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
-              {getShopName(currentUser.shopId)}
+              {getShopName(currentUser.shopId, currentUser.shopName)}
             </span>
           </div>
         </div>
@@ -204,7 +213,7 @@ function App() {
           }}
         >
           <Store size={15} color="var(--primary)" />
-          <span>Loja: <strong>{getShopName(currentUser.shopId)}</strong></span>
+          <span>Loja: <strong>{getShopName(currentUser.shopId, currentUser.shopName)}</strong></span>
         </div>
 
         <nav className="nav-links" aria-label="Navegação principal">
@@ -226,7 +235,7 @@ function App() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="user-profile">
               <div className="user-avatar" style={{ textTransform: 'uppercase' }} aria-hidden="true">
-                {currentUser.name[0]}
+                {currentUser.name ? currentUser.name[0] : '?'}
               </div>
               <div className="user-info">
                 <div className="user-name" style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -505,7 +514,7 @@ function App() {
                 <div>
                   <p style={{ margin: '0 0 4px' }}><strong>Nº OS:</strong> {activePrintData.data.osNumber}</p>
                   <p style={{ margin: '0 0 4px' }}><strong>Data da OS:</strong> {new Date(activePrintData.data.date).toLocaleDateString('pt-BR')}</p>
-                  <p style={{ margin: 0 }}><strong>Loja Emissora:</strong> Filial {activePrintData.data.shop_id === 'loja-1' ? '1 - Centro' : '2 - Shopping'}</p>
+                  <p style={{ margin: 0 }}><strong>Loja Emissora:</strong> {getPrintShopName(activePrintData.data.shop_id, activePrintData.data.shopName || activePrintData.data.shop_name)}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: '0 0 4px' }}>
@@ -656,7 +665,7 @@ function App() {
                 <div>
                   <p style={{ margin: '0 0 4px' }}><strong>Nº OS:</strong> {activePrintData.data.osNumber}</p>
                   <p style={{ margin: '0 0 4px' }}><strong>Data do Pedido:</strong> {new Date(activePrintData.data.date).toLocaleDateString('pt-BR')}</p>
-                  <p style={{ margin: 0 }}><strong>Loja:</strong> Filial {activePrintData.data.shop_id === 'loja-1' ? '1 - Centro' : '2 - Shopping'}</p>
+                  <p style={{ margin: 0 }}><strong>Loja:</strong> {getPrintShopName(activePrintData.data.shop_id, activePrintData.data.shopName || activePrintData.data.shop_name)}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: '0 0 4px' }}><strong>Cliente:</strong> {activePrintData.patientName}</p>

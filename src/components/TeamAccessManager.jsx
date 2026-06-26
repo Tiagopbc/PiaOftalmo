@@ -18,6 +18,7 @@ import {
   isStrongPassword,
   PASSWORD_POLICY_MESSAGE
 } from '../utils/passwords';
+import { shopService } from '../services/shopService';
 import { PasswordRequirements } from './PasswordRequirements';
 import { StatePanel } from './StatePanel';
 import { StatusBadge } from './StatusBadge';
@@ -29,11 +30,7 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: 'Administrador Geral' }
 ];
 
-const SHOP_OPTIONS = [
-  { value: 'loja-1', label: 'Filial 1 - Centro' },
-  { value: 'loja-2', label: 'Filial 2 - Shopping' },
-  { value: 'all', label: 'Todas as Filiais' }
-];
+const ALL_SHOPS_OPTION = { value: 'all', label: 'Todas as Filiais' };
 
 const formatAccessDate = (value) => {
   if (!value) return 'Nunca acessou';
@@ -45,11 +42,13 @@ const formatAccessDate = (value) => {
 
 export const TeamAccessManager = ({ currentUser }) => {
   const canUseRemoteManagement =
-    isSupabaseConfigured && Boolean(currentUser) && !currentUser?.isDemo;
+    isSupabaseConfigured && Boolean(currentUser);
 
   const [users, setUsers] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(canUseRemoteManagement);
+  const [shops, setShops] = useState([]);
+  const [loadingShops, setLoadingShops] = useState(canUseRemoteManagement);
   const [operationUserId, setOperationUserId] = useState('');
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -58,7 +57,7 @@ export const TeamAccessManager = ({ currentUser }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('recepcao');
-  const [shopId, setShopId] = useState('loja-1');
+  const [shopId, setShopId] = useState('');
   const [creating, setCreating] = useState(false);
   const [resetUserId, setResetUserId] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
@@ -68,6 +67,54 @@ export const TeamAccessManager = ({ currentUser }) => {
   const activeAdminCount = users.filter((user) =>
     user.role === 'admin' && user.isActive
   ).length;
+
+  const getDefaultShopId = useCallback(() => {
+    return shops.find((shop) => shop.isActive)?.id || '';
+  }, [shops]);
+
+  const getShopLabel = (shop) => {
+    const inactiveLabel = shop.isActive ? '' : ' (inativa)';
+    return `${shop.name}${inactiveLabel}`;
+  };
+
+  const getShopOptionsForRole = (selectedRole, selectedShopId = '') => {
+    if (selectedRole === 'admin') return [ALL_SHOPS_OPTION];
+
+    const activeShops = shops.filter((shop) => shop.isActive);
+    const selectedInactiveShop = shops.find((shop) =>
+      shop.id === selectedShopId && !shop.isActive
+    );
+    const selectedUnknownShop = selectedShopId && !shops.some((shop) => shop.id === selectedShopId)
+      ? { id: selectedShopId, name: 'Filial atual não encontrada', isActive: false }
+      : null;
+
+    const options = selectedUnknownShop
+      ? [selectedUnknownShop, ...activeShops]
+      : selectedInactiveShop
+        ? [selectedInactiveShop, ...activeShops]
+        : activeShops;
+
+    return options.map((shop) => ({
+      value: shop.id,
+      label: getShopLabel(shop)
+    }));
+  };
+
+  const loadShops = useCallback(async () => {
+    if (!canUseRemoteManagement) return;
+
+    setLoadingShops(true);
+
+    try {
+      const data = await shopService.getAll();
+      setShops(data);
+      setShopId((currentShopId) => currentShopId || data.find((shop) => shop.isActive)?.id || '');
+    } catch (loadError) {
+      setError(loadError.message);
+    } finally {
+      setLoadingShops(false);
+    }
+  }, [canUseRemoteManagement]);
 
   const loadUsers = useCallback(async () => {
     if (!canUseRemoteManagement) return;
@@ -116,11 +163,63 @@ export const TeamAccessManager = ({ currentUser }) => {
     };
   }, [canUseRemoteManagement]);
 
+  useEffect(() => {
+    if (!canUseRemoteManagement) return undefined;
+
+    let cancelled = false;
+
+    shopService.getAll()
+      .then((data) => {
+        if (cancelled) return;
+        setShops(data);
+        setShopId((currentShopId) => currentShopId || data.find((shop) => shop.isActive)?.id || '');
+      })
+      .catch((loadError) => {
+        if (!cancelled) setError(loadError.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingShops(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canUseRemoteManagement]);
+
   const updateDraft = (userId, field, value) => {
     setDrafts((current) => ({
       ...current,
       [userId]: { ...current[userId], [field]: value }
     }));
+  };
+
+  const updateDraftRole = (userId, value) => {
+    setDrafts((current) => {
+      const currentDraft = current[userId] || {};
+      const nextShopId = value === 'admin'
+        ? 'all'
+        : currentDraft.shopId === 'all'
+          ? getDefaultShopId()
+          : currentDraft.shopId;
+
+      return {
+        ...current,
+        [userId]: {
+          ...currentDraft,
+          role: value,
+          shopId: nextShopId || ''
+        }
+      };
+    });
+  };
+
+  const handleCreateRoleChange = (value) => {
+    setRole(value);
+    setShopId(value === 'admin' ? 'all' : getDefaultShopId());
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([loadUsers(), loadShops()]);
   };
 
   const handleCreate = async (event) => {
@@ -133,6 +232,11 @@ export const TeamAccessManager = ({ currentUser }) => {
       return;
     }
 
+    if (role !== 'admin' && !shopId) {
+      setError('Cadastre ou reative uma filial antes de criar usuários não administradores.');
+      return;
+    }
+
     setCreating(true);
 
     try {
@@ -142,13 +246,13 @@ export const TeamAccessManager = ({ currentUser }) => {
         email,
         password,
         role,
-        shopId
+        shopId: role === 'admin' ? 'all' : shopId
       });
       setName('');
       setEmail('');
       setPassword('');
       setRole('recepcao');
-      setShopId('loja-1');
+      setShopId(getDefaultShopId());
       setFeedback('Conta criada. A senha provisória deverá ser trocada no primeiro acesso.');
       await loadUsers();
     } catch (createError) {
@@ -270,8 +374,8 @@ export const TeamAccessManager = ({ currentUser }) => {
     return (
       <StatePanel
         type="empty"
-        title="Contas reais indisponíveis no modo de teste"
-        description="Entre com uma conta administrativa do Supabase para listar e gerenciar os acessos da equipe."
+        title="Gestão de acessos indisponível"
+        description="Entre com uma conta administrativa real e confirme a configuração do Supabase para listar e gerenciar os acessos da equipe."
       />
     );
   }
@@ -337,7 +441,7 @@ export const TeamAccessManager = ({ currentUser }) => {
                 id="team-role"
                 className="form-control"
                 value={role}
-                onChange={(event) => setRole(event.target.value)}
+                onChange={(event) => handleCreateRoleChange(event.target.value)}
                 disabled={creating}
               >
                 {ROLE_OPTIONS.map((option) => (
@@ -351,18 +455,22 @@ export const TeamAccessManager = ({ currentUser }) => {
               <select
                 id="team-shop"
                 className="form-control"
-                value={shopId}
+                value={role === 'admin' ? 'all' : shopId}
                 onChange={(event) => setShopId(event.target.value)}
-                disabled={creating}
+                disabled={creating || role === 'admin' || loadingShops}
               >
-                {SHOP_OPTIONS.map((option) => (
+                {getShopOptionsForRole(role, shopId).map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={creating}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={creating || (role !== 'admin' && !shopId)}
+          >
             <UserPlus size={17} /> {creating ? 'Criando conta...' : 'Criar conta de acesso'}
           </button>
         </form>
@@ -381,10 +489,10 @@ export const TeamAccessManager = ({ currentUser }) => {
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={loadUsers}
-            disabled={loading}
+            onClick={handleRefresh}
+            disabled={loading || loadingShops}
           >
-            <RefreshCw size={15} className={loading ? 'state-spinner' : ''} /> Atualizar
+            <RefreshCw size={15} className={loading || loadingShops ? 'state-spinner' : ''} /> Atualizar
           </button>
         </div>
 
@@ -415,7 +523,7 @@ export const TeamAccessManager = ({ currentUser }) => {
             description={error}
             compact
             action={(
-              <button type="button" className="btn btn-secondary btn-sm" onClick={loadUsers}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handleRefresh}>
                 Tentar novamente
               </button>
             )}
@@ -468,7 +576,7 @@ export const TeamAccessManager = ({ currentUser }) => {
                         id={`role-${user.id}`}
                         className="form-control"
                         value={draft.role}
-                        onChange={(event) => updateDraft(user.id, 'role', event.target.value)}
+                        onChange={(event) => updateDraftRole(user.id, event.target.value)}
                         disabled={isOperating || !user.isActive}
                       >
                         {ROLE_OPTIONS.map((option) => (
@@ -494,9 +602,9 @@ export const TeamAccessManager = ({ currentUser }) => {
                         className="form-control"
                         value={draft.shopId}
                         onChange={(event) => updateDraft(user.id, 'shopId', event.target.value)}
-                        disabled={isOperating || !user.isActive}
+                        disabled={isOperating || !user.isActive || draft.role === 'admin' || loadingShops}
                       >
-                        {SHOP_OPTIONS.map((option) => (
+                        {getShopOptionsForRole(draft.role, draft.shopId).map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>

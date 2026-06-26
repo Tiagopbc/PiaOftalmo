@@ -32,7 +32,15 @@ REVOKE EXECUTE ON FUNCTION public.process_audit_log() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.process_audit_log() FROM anon;
 REVOKE EXECUTE ON FUNCTION public.process_audit_log() FROM authenticated;
 
+REVOKE EXECUTE ON FUNCTION public.resolve_shop_id(TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.resolve_shop_id(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.resolve_shop_id(TEXT) TO authenticated;
+
 REVOKE EXECUTE ON FUNCTION public.user_has_shop_access(UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.user_has_shop_access(UUID) FROM anon;
 -- Garantimos que o "authenticated" tenha execute para as políticas RLS avaliadas
 GRANT EXECUTE ON FUNCTION public.user_has_shop_access(UUID) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.user_has_shop_access(TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.user_has_shop_access(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.user_has_shop_access(TEXT) TO authenticated;

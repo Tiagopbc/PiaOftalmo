@@ -6,6 +6,7 @@
 
 CREATE TABLE IF NOT EXISTS public.shops (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    legacy_code TEXT UNIQUE,
     name VARCHAR(255) NOT NULL,
     address TEXT,
     phone VARCHAR(50),
@@ -29,6 +30,18 @@ CREATE TABLE IF NOT EXISTS public.user_shop_access (
     assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(profile_id, shop_id)
 );
+
+-- Compatibilidade com dados antigos que usavam shop_id textual
+-- como "loja-1" e "loja-2". O banco novo usa UUID em public.shops.id.
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS legacy_code TEXT UNIQUE;
+
+INSERT INTO public.shops (legacy_code, name, is_active)
+VALUES
+    ('loja-1', 'Filial 1 - Centro', true),
+    ('loja-2', 'Filial 2 - Shopping', true)
+ON CONFLICT (legacy_code) DO UPDATE SET
+    name = EXCLUDED.name,
+    is_active = EXCLUDED.is_active;
 
 -- 2. CRIAÇÃO DA TABELA DE AUDITORIA
 
@@ -60,7 +73,7 @@ BEGIN
     
     -- Tenta capturar o shop_id se a tabela possuir essa coluna
     BEGIN
-        v_shop_id := (NEW.shop_id)::UUID;
+        v_shop_id := public.resolve_shop_id((NEW.shop_id)::TEXT);
     EXCEPTION WHEN OTHERS THEN
         v_shop_id := NULL;
     END;
@@ -112,6 +125,31 @@ ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Função Helper: Checa se o usuário logado tem acesso a um determinado shop_id
+CREATE OR REPLACE FUNCTION public.resolve_shop_id(raw_shop_id TEXT)
+RETURNS UUID AS $$
+DECLARE
+    resolved_shop_id UUID;
+BEGIN
+    IF raw_shop_id IS NULL OR btrim(raw_shop_id) = '' OR raw_shop_id = 'all' THEN
+        RETURN NULL;
+    END IF;
+
+    BEGIN
+        RETURN raw_shop_id::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        NULL;
+    END;
+
+    SELECT id
+    INTO resolved_shop_id
+    FROM public.shops
+    WHERE legacy_code = raw_shop_id
+    LIMIT 1;
+
+    RETURN resolved_shop_id;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '';
+
 CREATE OR REPLACE FUNCTION public.user_has_shop_access(check_shop_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -127,40 +165,63 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
+CREATE OR REPLACE FUNCTION public.user_has_shop_access(check_shop_id TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+    resolved_shop_id UUID;
+BEGIN
+    -- Super admins (role='admin') ignoram a trava de filial
+    IF (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin' THEN
+        RETURN TRUE;
+    END IF;
+
+    resolved_shop_id := public.resolve_shop_id(check_shop_id);
+
+    IF resolved_shop_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    RETURN EXISTS (
+        SELECT 1 FROM public.user_shop_access
+        WHERE profile_id = auth.uid() AND shop_id = resolved_shop_id
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
 -- Políticas para patients
 DROP POLICY IF EXISTS "Usuários veem pacientes de suas filiais" ON public.patients;
 CREATE POLICY "Usuários veem pacientes de suas filiais" ON public.patients
-FOR SELECT USING (public.user_has_shop_access(shop_id::UUID));
+FOR SELECT USING (public.user_has_shop_access(shop_id::TEXT));
 
 DROP POLICY IF EXISTS "Usuários criam pacientes em suas filiais" ON public.patients;
 CREATE POLICY "Usuários criam pacientes em suas filiais" ON public.patients
-FOR INSERT WITH CHECK (public.user_has_shop_access(shop_id::UUID));
+FOR INSERT WITH CHECK (public.user_has_shop_access(shop_id::TEXT));
 
 DROP POLICY IF EXISTS "Usuários atualizam pacientes de suas filiais" ON public.patients;
 CREATE POLICY "Usuários atualizam pacientes de suas filiais" ON public.patients
-FOR UPDATE USING (public.user_has_shop_access(shop_id::UUID));
+FOR UPDATE USING (public.user_has_shop_access(shop_id::TEXT));
 
 -- Políticas para appointments
 DROP POLICY IF EXISTS "Usuários veem agendamentos de suas filiais" ON public.appointments;
 CREATE POLICY "Usuários veem agendamentos de suas filiais" ON public.appointments
-FOR SELECT USING (public.user_has_shop_access(shop_id::UUID));
+FOR SELECT USING (public.user_has_shop_access(shop_id::TEXT));
 
 DROP POLICY IF EXISTS "Usuários criam agendamentos em suas filiais" ON public.appointments;
 CREATE POLICY "Usuários criam agendamentos em suas filiais" ON public.appointments
-FOR INSERT WITH CHECK (public.user_has_shop_access(shop_id::UUID));
+FOR INSERT WITH CHECK (public.user_has_shop_access(shop_id::TEXT));
 
 DROP POLICY IF EXISTS "Usuários atualizam agendamentos de suas filiais" ON public.appointments;
 CREATE POLICY "Usuários atualizam agendamentos de suas filiais" ON public.appointments
-FOR UPDATE USING (public.user_has_shop_access(shop_id::UUID));
+FOR UPDATE USING (public.user_has_shop_access(shop_id::TEXT));
 
 -- Políticas para waitlist
 DROP POLICY IF EXISTS "Usuários veem fila de suas filiais" ON public.waitlist;
 CREATE POLICY "Usuários veem fila de suas filiais" ON public.waitlist
-FOR SELECT USING (public.user_has_shop_access(shop_id::UUID));
+FOR SELECT USING (public.user_has_shop_access(shop_id::TEXT));
 
 DROP POLICY IF EXISTS "Usuários gerenciam fila em suas filiais" ON public.waitlist;
 CREATE POLICY "Usuários gerenciam fila em suas filiais" ON public.waitlist
-FOR ALL USING (public.user_has_shop_access(shop_id::UUID));
+FOR ALL USING (public.user_has_shop_access(shop_id::TEXT));
 
 -- Políticas para audit_logs
 DROP POLICY IF EXISTS "Admins leem todos logs, gerentes leem de sua filial" ON public.audit_logs;

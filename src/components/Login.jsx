@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { getAuthUserProfile } from '../utils/authUser';
-import { Glasses, Lock, Mail, AlertCircle, Play, Database, KeyRound, X } from 'lucide-react';
+import { Glasses, Lock, Mail, AlertCircle, KeyRound, X } from 'lucide-react';
 
 const Login = () => {
   const { setCurrentUser } = useAuth();
@@ -10,26 +10,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [demoRole, setDemoRole] = useState('admin');
   const [showAccessHelp, setShowAccessHelp] = useState(false);
-
-  const handleDemoLogin = () => {
-    const names = {
-      admin: 'Administrador de Testes',
-      medico: 'Dr. Roberto Mendes',
-      recepcao: 'Clara — Recepção',
-      vendedor: 'Marcos — Óptica'
-    };
-
-    setCurrentUser({
-      id: `demo-${demoRole}`,
-      email: `${demoRole}@demo.local`,
-      name: names[demoRole],
-      role: demoRole,
-      shopId: demoRole === 'admin' ? 'all' : 'loja-1',
-      isDemo: true
-    });
-  };
 
   const handleRealLogin = async (e) => {
     e.preventDefault();
@@ -49,7 +30,8 @@ const Login = () => {
 
       if (authError) throw authError;
 
-      setCurrentUser(getAuthUserProfile(data.user));
+      const profile = await getAuthUserProfile(data.user);
+      setCurrentUser(profile);
     } catch (err) {
       let errorMessage = err.message || 'Erro ao realizar login.';
       if (errorMessage === '{}' || typeof errorMessage !== 'string') {
@@ -197,38 +179,7 @@ const Login = () => {
           </section>
         )}
 
-        {import.meta.env.DEV && (
-          <>
-            <div className="login-divider"><span>ou teste no localhost</span></div>
 
-            <div className="login-demo-card">
-              <div className="login-demo-heading">
-                <div className="login-demo-icon"><Database size={18} /></div>
-                <div>
-                  <strong>Acesso local de demonstração</strong>
-                  <span>10 pacientes fictícios, sem alterar o Supabase</span>
-                </div>
-              </div>
-
-              <label htmlFor="demo-role" className="login-demo-label">Perfil para o teste</label>
-              <select
-                id="demo-role"
-                className="form-control"
-                value={demoRole}
-                onChange={(event) => setDemoRole(event.target.value)}
-              >
-                <option value="admin">Administrador — acesso completo</option>
-                <option value="recepcao">Recepção</option>
-                <option value="medico">Especialista</option>
-                <option value="vendedor">Óptica / OS</option>
-              </select>
-
-              <button type="button" className="btn btn-secondary login-demo-button" onClick={handleDemoLogin}>
-                <Play size={16} fill="currentColor" /> Entrar no ambiente de teste
-              </button>
-            </div>
-          </>
-        )}
       </div>
     </div>
   );

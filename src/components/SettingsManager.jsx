@@ -2,18 +2,20 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { User, Users, Building2, Save, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Users, Building2, Save, Lock, Eye, EyeOff, Store } from 'lucide-react';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwords';
+import { getShopDisplayName } from '../utils/shops';
 import PageHeader from './PageHeader';
 import { PasswordRequirements } from './PasswordRequirements';
 import { TeamAccessManager } from './TeamAccessManager';
+import { ShopManager } from './ShopManager';
 
 const SettingsManager = () => {
   const { currentUser, setCurrentUser } = useAuth();
   const { clinicSettings, updateClinicSettings } = useApp();
 
   const isAdmin = currentUser?.role === 'admin';
-  const [activeSubTab, setActiveSubTab] = useState(() => isAdmin ? 'clinic' : 'account'); // clinic, team, account
+  const [activeSubTab, setActiveSubTab] = useState(() => isAdmin ? 'clinic' : 'account'); // clinic, shops, team, account
 
   // State para Dados da Clínica
   const [clinicName, setClinicName] = useState(clinicSettings.name || '');
@@ -37,7 +39,7 @@ const SettingsManager = () => {
 
     setUpdatingProfile(true);
 
-    if (isSupabaseConfigured && !currentUser?.isDemo) {
+    if (isSupabaseConfigured) {
       try {
         const { error } = await supabase.auth.updateUser({
           data: { name: profileName }
@@ -58,8 +60,7 @@ const SettingsManager = () => {
         setUpdatingProfile(false);
       }
     } else {
-      setCurrentUser((prev) => ({ ...prev, name: profileName }));
-      alert('Nome atualizado neste ambiente de teste.');
+      alert('Supabase não configurado. Não foi possível atualizar o perfil real.');
       setUpdatingProfile(false);
     }
   };
@@ -78,7 +79,7 @@ const SettingsManager = () => {
 
     setUpdatingPassword(true);
 
-    if (isSupabaseConfigured && !currentUser?.isDemo) {
+    if (isSupabaseConfigured) {
       try {
         const { error } = await supabase.auth.updateUser({
           password: newPasswordState
@@ -97,7 +98,7 @@ const SettingsManager = () => {
         setUpdatingPassword(false);
       }
     } else {
-      alert('No modo local a senha não é utilizada. Entre com uma conta real para alterá-la.');
+      alert('Supabase não configurado. Não foi possível atualizar a senha real.');
       setUpdatingPassword(false);
     }
   };
@@ -150,6 +151,15 @@ const SettingsManager = () => {
               onClick={() => setActiveSubTab('team')}
             >
               <Users size={16} /> Equipe & Acessos
+            </button>
+            <button
+              type="button"
+              aria-pressed={activeSubTab === 'shops'}
+              className={`btn ${activeSubTab === 'shops' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
+              onClick={() => setActiveSubTab('shops')}
+            >
+              <Store size={16} /> Unidades / Filiais
             </button>
           </>
         )}
@@ -242,7 +252,12 @@ const SettingsManager = () => {
           <TeamAccessManager currentUser={currentUser} />
         )}
 
-        {/* ABA 3: MINHA CONTA */}
+        {/* ABA 3: UNIDADES / FILIAIS */}
+        {isAdmin && activeSubTab === 'shops' && (
+          <ShopManager currentUser={currentUser} />
+        )}
+
+        {/* ABA 4: MINHA CONTA */}
         {activeSubTab === 'account' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '600px' }}>
 
@@ -289,11 +304,9 @@ const SettingsManager = () => {
                   <div>
                     <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>Loja / Filial atual</span>
                     <strong style={{ display: 'block', marginTop: '4px' }}>
-                      {currentUser?.shopId === 'all'
-                        ? 'Consolidado (Todas as Filiais)'
-                        : currentUser?.shopId === 'loja-1'
-                        ? 'Filial 1 - Centro'
-                        : 'Filial 2 - Shopping'}
+                      {getShopDisplayName(currentUser?.shopId, currentUser?.shopName, {
+                        allLabel: 'Consolidado (Todas as Filiais)'
+                      })}
                     </strong>
                   </div>
                 </div>
