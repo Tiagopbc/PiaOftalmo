@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 const STATUS_VARIANTS = {
   ativo: 'success',
   atendido: 'success',
@@ -17,10 +19,18 @@ const STATUS_VARIANTS = {
   administrativo: 'warning',
   inativo: 'neutral',
   'pronto para retirada': 'ready'
+} as const;
+
+type StatusVariantKey = keyof typeof STATUS_VARIANTS;
+
+type StatusBadgeProps = {
+  status?: ReactNode;
+  label?: ReactNode;
+  className?: string;
 };
 
-export const StatusBadge = ({ status, label, className = '' }) => {
-  const normalizedStatus = String(status || '').trim().toLocaleLowerCase('pt-BR');
+export const StatusBadge = ({ status, label, className = '' }: StatusBadgeProps) => {
+  const normalizedStatus = String(status || '').trim().toLocaleLowerCase('pt-BR') as StatusVariantKey;
   const variant = STATUS_VARIANTS[normalizedStatus] || 'neutral';
 
   return (

@@ -1,9 +1,23 @@
 import { CheckCircle2, Circle } from 'lucide-react';
-import { getPasswordRequirements } from '../utils/passwords';
+import { getPasswordRequirements, type PasswordRequirement } from '../utils/passwords';
 
-export const PasswordRequirements = ({ password, confirmation = null }) => {
+type PasswordRequirementsProps = {
+  password?: string;
+  confirmation?: string | null;
+};
+
+type VisibleRequirement = PasswordRequirement | {
+  id: 'confirmation';
+  label: string;
+  met: boolean;
+};
+
+export const PasswordRequirements = ({
+  password = '',
+  confirmation = null
+}: PasswordRequirementsProps) => {
   const requirements = getPasswordRequirements(password);
-  const visibleRequirements = confirmation === null
+  const visibleRequirements: VisibleRequirement[] = confirmation === null
     ? requirements
     : [
         ...requirements,

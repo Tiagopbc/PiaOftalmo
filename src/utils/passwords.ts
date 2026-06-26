@@ -1,3 +1,17 @@
+type PasswordRequirementId = 'length' | 'uppercase' | 'lowercase' | 'number' | 'symbol';
+
+type PasswordRequirementDefinition = {
+  id: PasswordRequirementId;
+  label: string;
+  test: (password: string) => boolean;
+};
+
+export type PasswordRequirement = {
+  id: PasswordRequirementId;
+  label: string;
+  met: boolean;
+};
+
 const PASSWORD_GROUPS = [
   'ABCDEFGHJKLMNPQRSTUVWXYZ',
   'abcdefghijkmnopqrstuvwxyz',
@@ -10,7 +24,7 @@ const PASSWORD_ALPHABET = PASSWORD_GROUPS.join('');
 export const PASSWORD_POLICY_MESSAGE =
   'Use pelo menos 8 caracteres, incluindo letra maiúscula, letra minúscula, número e símbolo.';
 
-const PASSWORD_REQUIREMENT_DEFINITIONS = [
+const PASSWORD_REQUIREMENT_DEFINITIONS: PasswordRequirementDefinition[] = [
   {
     id: 'length',
     label: '8 caracteres ou mais',
@@ -38,7 +52,7 @@ const PASSWORD_REQUIREMENT_DEFINITIONS = [
   }
 ];
 
-export const getPasswordRequirements = (password = '') =>
+export const getPasswordRequirements = (password = ''): PasswordRequirement[] =>
   PASSWORD_REQUIREMENT_DEFINITIONS.map((requirement) => ({
     id: requirement.id,
     label: requirement.label,
@@ -48,7 +62,7 @@ export const getPasswordRequirements = (password = '') =>
 export const isStrongPassword = (password = '') =>
   getPasswordRequirements(password).every((requirement) => requirement.met);
 
-const secureRandomIndex = (size) => {
+const secureRandomIndex = (size: number) => {
   const values = new Uint32Array(1);
   const maximum = Math.floor(0x100000000 / size) * size;
 
@@ -59,7 +73,7 @@ const secureRandomIndex = (size) => {
   return values[0] % size;
 };
 
-const randomCharacter = (characters) =>
+const randomCharacter = (characters: string) =>
   characters[secureRandomIndex(characters.length)];
 
 export const generateTemporaryPassword = (length = 16) => {
