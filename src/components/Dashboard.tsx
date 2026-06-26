@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent, type ReactNode } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../context/PatientContext';
 import { useAppointments } from '../context/AppointmentContext';
@@ -9,6 +9,16 @@ import { getInventoryItems } from '../services/inventoryService';
 import { Users, Calendar, ShoppingBag, ListPlus, AlertTriangle, CheckCircle, XCircle, Clock, Glasses, ArrowRight, DollarSign, Package } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
+import type { Appointment, InventoryItem, Sale } from '../types';
+
+type QuickAction = {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  color: string;
+  bgColor: string;
+  tab: string;
+};
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
@@ -18,8 +28,8 @@ const Dashboard = () => {
   const { setActiveTab, setSelectedPatientId } = useApp();
 
   // New States for Phase 4 Metrics
-  const [sales, setSales] = useState([]);
-  const [inventory, setInventory] = useState([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
   // Filters & States
   const [filterKey, setFilterKey] = useState('todos');
@@ -27,10 +37,10 @@ const Dashboard = () => {
   const [newWaitName, setNewWaitName] = useState('');
   const [newWaitPhone, setNewWaitPhone] = useState('');
   // Removed unused newWaitDoctor and newWaitService to satisfy lint
-  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
   const [cancelReason, setCancelReason] = useState('Paciente desistiu / não pôde comparecer');
   const [customReason, setCustomReason] = useState('');
-  const [toastMessage, setToastMessage] = useState(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const userShopId = currentUser?.shopId;
 
@@ -50,12 +60,12 @@ const Dashboard = () => {
     }
   }, [userShopId]);
 
-  const triggerToast = (msg) => {
+  const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleAddWaitSubmit = (e) => {
+  const handleAddWaitSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newWaitName.trim() || !newWaitPhone.trim()) return;
     addWaitlist({
@@ -70,7 +80,7 @@ const Dashboard = () => {
     triggerToast('Paciente adicionado à fila de espera!');
   };
 
-  const quickActions = [
+  const quickActions: QuickAction[] = [
     { id: 'encaixe', label: 'Novo agendamento', icon: <Calendar size={20} />, color: 'var(--primary)', bgColor: 'var(--primary-light)', tab: 'agenda' },
     { id: 'waitlist', label: 'Fila de espera', icon: <ListPlus size={20} />, color: 'var(--accent)', bgColor: 'var(--accent-light)', tab: 'agenda' },
     { id: 'optical', label: 'Nova OS', icon: <Glasses size={20} />, color: '#8b5cf6', bgColor: '#f5f3ff', tab: 'optical' },
@@ -108,12 +118,12 @@ const Dashboard = () => {
   }));
   const allAlerts = [...clinicalAlerts, ...lowStockAlerts];
 
-  const handlePatientClick = (patientId) => {
+  const handlePatientClick = (patientId: string) => {
     setSelectedPatientId(patientId);
     setActiveTab('patients');
   };
 
-  const handleQuickAction = (action) => {
+  const handleQuickAction = (action: QuickAction) => {
     if (action.id === 'waitlist') {
       setShowAddWait(prev => !prev);
       return;

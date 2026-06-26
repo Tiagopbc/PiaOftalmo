@@ -115,13 +115,13 @@ function App() {
     }
   };
 
-  const getShopName = (shopId, shopName) => getShopDisplayName(shopId, shopName);
-  const getPrintShopName = (shopId, shopName) => getShopDisplayName(
+  const getShopName = (shopId?: string, shopName?: string) => getShopDisplayName(shopId, shopName);
+  const getPrintShopName = (shopId?: string, shopName?: string) => getShopDisplayName(
     shopId,
     shopName || (shopId === currentUser.shopId ? currentUser.shopName : undefined)
   );
 
-  const getRoleBadge = (role) => {
+  const getRoleBadge = (role: string) => {
     switch (role) {
       case 'admin': return 'Administrador';
       case 'medico': return 'Especialista';
@@ -331,7 +331,7 @@ function App() {
         const lensType = rx.lensType || '';
 
         // Calculate age
-        const calculateAge = (birthDateString) => {
+        const calculateAge = (birthDateString?: string) => {
           if (!birthDateString) return '';
           const today = new Date();
           const birthDate = new Date(birthDateString + 'T00:00:00');

@@ -9,11 +9,20 @@ import { calculateCommission } from '../utils/helpers';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
+import type { Sale } from '../types';
+import type { Shop } from '../services/shopService';
+
+type PurchaseRow = Sale & {
+  value: number;
+  item: string;
+  osNumber: string;
+  patientName: string;
+};
 
 const FinanceManager = () => {
   const { currentUser } = useAuth();
-  const [sales, setSales] = useState([]);
-  const [shops, setShops] = useState([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   useEffect(() => {
     saleService.getAll().then(setSales).catch(console.error);
   }, []);
@@ -26,7 +35,7 @@ const FinanceManager = () => {
       .catch(console.error);
   }, [currentUser?.shopId]);
 
-  const updatePurchaseStatus = async (patientId, purchaseId, status) => {
+  const updatePurchaseStatus = async (patientId: string, purchaseId: string, status: string) => {
     try {
       await saleService.updateSaleStatus(purchaseId, status);
       const newSales = await saleService.getAll();
@@ -36,7 +45,7 @@ const FinanceManager = () => {
   const { appointments } = useAppointments();
   const { setActiveTab, setSelectedPatientId, professionals } = useApp();
 
-  const formatValue = (val) => {
+  const formatValue = (val: string | number) => {
     const num = Number(val);
     return (isNaN(num) ? 0 : num).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
@@ -54,7 +63,7 @@ const FinanceManager = () => {
   const PRIVATE_CONSULTATION_PRICE = 350.00;
   const INSURANCE_CONSULTATION_FEE = 120.00;
 
-  const allPurchases = sales.map(s => ({
+  const allPurchases: PurchaseRow[] = sales.map(s => ({
     ...s,
     value: s.totalAmount,
     item: s.notes || 'Produto',
@@ -76,7 +85,7 @@ const FinanceManager = () => {
   // Calcular métricas com base nos filtros
   const totalOpticalSales = filteredPurchases
     .filter((pur) => pur.status !== 'Cancelado')
-    .reduce((acc, pur) => acc + parseFloat(pur.value || 0), 0);
+    .reduce((acc, pur) => acc + Number(pur.value || 0), 0);
 
   // Consultas particulares faturadas (apenas atendidas)
   const atendidoParticularApps = filteredAppointments.filter(
@@ -95,16 +104,16 @@ const FinanceManager = () => {
 
   // Contas a receber (OS pendentes de pagamento)
   const unpaidPurchases = filteredPurchases.filter((pur) => pur.status === 'Aguardando Pagamento');
-  const totalReceivables = unpaidPurchases.reduce((acc, pur) => acc + parseFloat(pur.value || 0), 0);
+  const totalReceivables = unpaidPurchases.reduce((acc, pur) => acc + Number(pur.value || 0), 0);
 
   // Manipular redirecionamento para o paciente
-  const handlePatientClick = (patientId) => {
+  const handlePatientClick = (patientId: string) => {
     setSelectedPatientId(patientId);
     setActiveTab('patients');
   };
 
   // Liquidar pagamento
-  const handleSettlePayment = (patientId, purchaseId) => {
+  const handleSettlePayment = (patientId: string, purchaseId: string) => {
     updatePurchaseStatus(patientId, purchaseId, 'Entregue');
     alert('Pagamento recebido com sucesso! A Ordem de Serviço foi marcada como Entregue e o alerta financeiro foi removido do prontuário.');
   };

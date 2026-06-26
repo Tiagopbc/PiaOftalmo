@@ -8,6 +8,12 @@ export const isSupabaseConfigured =
   supabaseAnonKey !== '' &&
   !supabaseUrl.includes('SUA_URL_DO_SUPABASE');
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
+const missingSupabaseClient = new Proxy({} as SupabaseClient, {
+  get() {
+    throw new Error('Supabase não configurado. Verifique VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
+  }
+});
+
+export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+  : missingSupabaseClient;

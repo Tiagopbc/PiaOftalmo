@@ -7,10 +7,19 @@ import { Search, Eye, RefreshCw, Layers, CheckCircle2, AlertCircle, Printer, Fla
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
+import type { OpticalOrder } from '../types';
+
+type OpticalOrderRow = OpticalOrder & {
+  osNumber: string;
+  item: string;
+  value: number;
+  patientName: string;
+  patientCpf: string;
+};
 
 const OpticalOrders = () => {
   const { currentUser } = useAuth();
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<OpticalOrder[]>([]);
   
   const loadOrders = async () => {
     try {
@@ -24,7 +33,7 @@ const OpticalOrders = () => {
     loadOrders();
   }, []);
 
-  const updatePurchaseStatus = async (patientId, purchaseId, status) => {
+  const updatePurchaseStatus = async (patientId: string, purchaseId: string, status: string) => {
     try {
       await saleService.updateOpticalOrderStatus(purchaseId, status);
       loadOrders();
@@ -32,7 +41,7 @@ const OpticalOrders = () => {
   };
   const { setActiveTab, setSelectedPatientId, setActivePrintData } = useApp();
 
-  const triggerPrintOS = (order, printType = 'cliente') => {
+  const triggerPrintOS = (order: OpticalOrderRow, printType = 'cliente') => {
     setActivePrintData({
       type: 'os',
       printType,
@@ -51,9 +60,9 @@ const OpticalOrders = () => {
 
   const userShopId = currentUser?.shopId;
 
-  const allOrders = orders.map(o => ({
+  const allOrders: OpticalOrderRow[] = orders.map(o => ({
     ...o,
-    osNumber: o.notes,
+    osNumber: o.notes || '-',
     item: 'Óculos',
     value: 0,
     patientName: 'Paciente',
@@ -63,7 +72,7 @@ const OpticalOrders = () => {
       return !order.shop_id || order.shop_id === userShopId;
     }
     return true;
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   // Filtrar ordens
   const filteredOrders = allOrders.filter((order) => {
@@ -78,10 +87,10 @@ const OpticalOrders = () => {
   });
 
   // Estatísticas das OS
-  const statCount = (status) => allOrders.filter((o) => o.status === status).length;
+  const statCount = (status: string) => allOrders.filter((o) => o.status === status).length;
   const activeCount = allOrders.filter((o) => o.status !== 'Entregue' && o.status !== 'Cancelado').length;
 
-  const handlePatientClick = (patientId) => {
+  const handlePatientClick = (patientId: string) => {
     setSelectedPatientId(patientId);
     setActiveTab('patients');
   };
@@ -224,12 +233,12 @@ const OpticalOrders = () => {
                           {order.patientName}
                         </button>
                       </td>
-                      <td>{new Date(order.date).toLocaleDateString('pt-BR')}</td>
+                      <td>{new Date(order.createdAt).toLocaleDateString('pt-BR')}</td>
                       <td style={{ maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {order.item}
                       </td>
                       <td style={{ fontWeight: 600 }}>
-                        R$ {parseFloat(order.value).toFixed(2)}
+                        R$ {Number(order.value).toFixed(2)}
                       </td>
                       <td>
                         <StatusBadge status={order.status} />

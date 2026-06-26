@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Glasses, KeyRound, Lock, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { invokeAdminUsers } from '../utils/adminUsers';
@@ -16,9 +16,10 @@ export const ForcedPasswordChange = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    if (!currentUser) return;
 
     if (!isStrongPassword(password)) {
       setError(PASSWORD_POLICY_MESSAGE);
@@ -46,15 +47,20 @@ export const ForcedPasswordChange = () => {
       const profile = await getAuthUserProfile(data.user);
       setCurrentUser(profile);
     } catch (changeError) {
+      const message = changeError instanceof Error
+        ? changeError.message
+        : 'Não foi possível alterar a senha. Tente novamente.';
       setError(
         passwordChanged
           ? 'Sua senha foi alterada, mas a nova sessão não pôde ser iniciada. Saia da conta e entre novamente com a nova senha.'
-          : changeError.message || 'Não foi possível alterar a senha. Tente novamente.'
+          : message
       );
     } finally {
       setLoading(false);
     }
   };
+
+  if (!currentUser) return null;
 
   return (
     <main className="password-recovery-screen">

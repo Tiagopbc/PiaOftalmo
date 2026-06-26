@@ -24,14 +24,19 @@ export const mapInventoryItemToSnake = (item: Partial<InventoryItem>): any => {
   return copy;
 };
 
-export const getInventoryItems = async (shopId: string): Promise<InventoryItem[]> => {
+export const getInventoryItems = async (shopId?: string): Promise<InventoryItem[]> => {
   if (!isSupabaseConfigured) return [];
-  
-  const { data, error } = await supabase
+
+  let query = supabase
     .from('inventory_items')
     .select('*')
-    .eq('shop_id', shopId)
     .order('name', { ascending: true });
+
+  if (shopId) {
+    query = query.eq('shop_id', shopId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching inventory items:', error);

@@ -2,14 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAuthUserProfile } from './authUser';
 
 const mocks = vi.hoisted(() => {
-  const state = {
+  const state: {
+    profile: Record<string, unknown> | null;
+    access: Record<string, unknown> | null;
+    profileError: Error | null;
+    accessError: Error | null;
+  } = {
     profile: null,
     access: null,
     profileError: null,
     accessError: null
   };
 
-  const from = vi.fn((table) => {
+  const from = vi.fn((table: string) => {
     const result = table === 'profiles'
       ? { data: state.profile, error: state.profileError }
       : { data: state.access, error: state.accessError };

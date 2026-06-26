@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
@@ -9,6 +9,9 @@ import PageHeader from './PageHeader';
 import { PasswordRequirements } from './PasswordRequirements';
 import { TeamAccessManager } from './TeamAccessManager';
 import { ShopManager } from './ShopManager';
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : 'Erro inesperado.';
 
 const SettingsManager = () => {
   const { currentUser, setCurrentUser } = useAuth();
@@ -33,7 +36,7 @@ const SettingsManager = () => {
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
-  const handleUpdateProfile = async (e) => {
+  const handleUpdateProfile = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!profileName.trim()) return;
 
@@ -48,14 +51,14 @@ const SettingsManager = () => {
         if (error) throw error;
 
         // Atualizar estado local do usuário no contexto
-        setCurrentUser((prev) => ({
+        setCurrentUser((prev) => prev ? ({
           ...prev,
           name: profileName
-        }));
+        }) : prev);
 
         alert('Nome de perfil atualizado com sucesso!');
       } catch (err) {
-        alert('Erro ao atualizar perfil: ' + err.message);
+        alert('Erro ao atualizar perfil: ' + getErrorMessage(err));
       } finally {
         setUpdatingProfile(false);
       }
@@ -65,7 +68,7 @@ const SettingsManager = () => {
     }
   };
 
-  const handleUpdatePassword = async (e) => {
+  const handleUpdatePassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!isStrongPassword(newPasswordState)) {
       alert(PASSWORD_POLICY_MESSAGE);
@@ -93,7 +96,7 @@ const SettingsManager = () => {
         setShowConfirmPassword(false);
         alert('Senha atualizada com sucesso!');
       } catch (err) {
-        alert('Erro ao atualizar senha: ' + err.message);
+        alert('Erro ao atualizar senha: ' + getErrorMessage(err));
       } finally {
         setUpdatingPassword(false);
       }
@@ -104,7 +107,7 @@ const SettingsManager = () => {
   };
 
   // Handler para Salvar Dados da Clínica
-  const handleSaveClinicSettings = (e) => {
+  const handleSaveClinicSettings = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoadingSettings(true);
     updateClinicSettings({
