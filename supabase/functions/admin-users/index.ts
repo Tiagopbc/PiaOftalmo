@@ -1,7 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const ALLOWED_ROLES = new Set(['admin', 'recepcao', 'medico', 'vendedor']);
-const ALLOWED_SHOPS = new Set(['all', 'loja-1', 'loja-2']);
 const LONG_BAN_DURATION = '876000h';
 const MINIMUM_ACTIVE_ADMINS = 2;
 const PASSWORD_POLICY_MESSAGE =
@@ -45,6 +44,31 @@ type AdminApi = {
   }>;
 };
 
+type ProfileRecord = {
+  id: string;
+  full_name?: string | null;
+  role?: string | null;
+  is_active?: boolean | null;
+};
+
+type ShopRecord = {
+  id: string;
+  legacy_code?: string | null;
+  name?: string | null;
+  is_active?: boolean | null;
+};
+
+type AccessRecord = {
+  profile_id: string;
+  shop_id: string;
+  shops?: ShopRecord | ShopRecord[] | null;
+};
+
+type AccessDirectory = {
+  profiles: Map<string, ProfileRecord>;
+  access: Map<string, AccessRecord>;
+};
+
 const isStrongPassword = (password: string) =>
     password.length >= 8 &&
     /[A-Z]/.test(password) &&
@@ -72,28 +96,197 @@ const isUserActive = (user: {
   return Number.isNaN(bannedUntil) || bannedUntil <= Date.now();
 };
 
-const serializeUser = (user: AuthUser, requesterId: string) => ({
-  id: user.id,
-  email: user.email || '',
-  name: String(user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário'),
-  role: String(user.app_metadata?.role || 'recepcao'),
-  shopId: String(user.app_metadata?.shop_id || 'loja-1'),
-  isActive: isUserActive(user),
-  createdAt: user.created_at,
-  lastSignInAt: user.last_sign_in_at || null,
-  isSelf: user.id === requesterId,
-  mustChangePassword: user.app_metadata?.must_change_password === true
-});
+const isUuid = (value: string) =>
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
 
-const canReduceAdminCoverage = async (admin: AdminApi) => {
+const getJoinedShop = (access?: AccessRecord) => {
+  const joined = access?.shops;
+  if (Array.isArray(joined)) return joined[0] || null;
+  return joined || null;
+};
+
+const fetchAccessDirectory = async (client: any, users: AuthUser[]): Promise<AccessDirectory> => {
+  const userIds = users.map((user) => user.id);
+
+  if (userIds.length === 0) {
+    return { profiles: new Map(), access: new Map() };
+  }
+
+  const { data: profiles, error: profilesError } = await client
+      .from('profiles')
+      .select('id, full_name, role, is_active')
+      .in('id', userIds);
+
+  if (profilesError) {
+    throw new Error(profilesError.message);
+  }
+
+  const { data: accessRows, error: accessError } = await client
+      .from('user_shop_access')
+      .select('profile_id, shop_id, shops(id, legacy_code, name, is_active)')
+      .in('profile_id', userIds);
+
+  if (accessError) {
+    throw new Error(accessError.message);
+  }
+
+  return {
+    profiles: new Map((profiles || []).map((profile: ProfileRecord) => [profile.id, profile])),
+    access: new Map((accessRows || []).map((access: AccessRecord) => [access.profile_id, access]))
+  };
+};
+
+const getRequesterProfile = async (client: any, userId: string): Promise<ProfileRecord | null> => {
+  const { data, error } = await client
+      .from('profiles')
+      .select('id, full_name, role, is_active')
+      .eq('id', userId)
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data || null;
+};
+
+const resolveShopUuid = async (
+  client: any,
+  shopId: string,
+  options: { requireActive?: boolean } = {}
+): Promise<string | null> => {
+  if (shopId === 'all') return null;
+
+  const query = client
+      .from('shops')
+      .select('id, is_active')
+      .limit(1);
+
+  const { data, error } = isUuid(shopId)
+      ? await query.eq('id', shopId)
+      : await query.eq('legacy_code', shopId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const shop = data?.[0];
+  if (!shop?.id) {
+    throw new Error('Filial não encontrada.');
+  }
+
+  if (options.requireActive && shop.is_active === false) {
+    throw new Error('Filial inativa. Reative a unidade antes de vincular usuários.');
+  }
+
+  return shop.id;
+};
+
+const ensureValidShopAssignment = async (client: any, role: string, shopId: string) => {
+  if (!ALLOWED_ROLES.has(role)) {
+    throw new Error('Função inválida.');
+  }
+
+  if (role === 'admin') {
+    if (shopId !== 'all') {
+      throw new Error('Administradores devem ficar com acesso consolidado a todas as filiais.');
+    }
+    return;
+  }
+
+  if (!shopId || shopId === 'all') {
+    throw new Error('Selecione uma filial ativa para este perfil.');
+  }
+
+  await resolveShopUuid(client, shopId, { requireActive: true });
+};
+
+const syncProfileAndAccess = async (
+  client: any,
+  user: AuthUser,
+  attributes: { name?: string; role: string; shopId: string; isActive?: boolean }
+) => {
+  const name = attributes.name || String(user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário');
+  const isActive = attributes.isActive ?? isUserActive(user);
+
+  const { error: profileError } = await client
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        full_name: name,
+        role: attributes.role,
+        is_active: isActive
+      }, { onConflict: 'id' });
+
+  if (profileError) {
+    throw new Error(profileError.message);
+  }
+
+  const { error: deleteError } = await client
+      .from('user_shop_access')
+      .delete()
+      .eq('profile_id', user.id);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  const resolvedShopId = await resolveShopUuid(client, attributes.shopId);
+
+  if (resolvedShopId) {
+    const { error: accessError } = await client
+        .from('user_shop_access')
+        .insert({
+          profile_id: user.id,
+          shop_id: resolvedShopId
+        });
+
+    if (accessError) {
+      throw new Error(accessError.message);
+    }
+  }
+};
+
+const serializeUser = (
+  user: AuthUser,
+  requesterId: string,
+  directory?: AccessDirectory
+) => {
+  const profile = directory?.profiles.get(user.id);
+  const access = directory?.access.get(user.id);
+  const shop = getJoinedShop(access);
+  const role = String(profile?.role || user.app_metadata?.role || 'recepcao');
+
+  return {
+    id: user.id,
+    email: user.email || '',
+    name: String(profile?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário'),
+    role,
+    shopId: role === 'admin'
+        ? 'all'
+        : String(access?.shop_id || shop?.legacy_code || user.app_metadata?.shop_id || ''),
+    shopName: role === 'admin' ? 'Todas as Filiais' : String(shop?.name || ''),
+    shopCode: role === 'admin' ? 'all' : String(shop?.legacy_code || ''),
+    isActive: profile?.is_active !== false && isUserActive(user),
+    createdAt: user.created_at,
+    lastSignInAt: user.last_sign_in_at || null,
+    isSelf: user.id === requesterId,
+    mustChangePassword: user.app_metadata?.must_change_password === true
+  };
+};
+
+const canReduceAdminCoverage = async (admin: AdminApi, client: any) => {
   const { data, error } = await admin.listUsers({ page: 1, perPage: 1000 });
 
   if (error) {
     throw new Error(error.message);
   }
 
+  const directory = await fetchAccessDirectory(client, data.users);
   const activeAdmins = data.users.filter((user) =>
-      user.app_metadata?.role === 'admin' && isUserActive(user)
+      (directory.profiles.get(user.id)?.role || user.app_metadata?.role) === 'admin' &&
+      directory.profiles.get(user.id)?.is_active !== false &&
+      isUserActive(user)
   );
 
   return activeAdmins.length > MINIMUM_ACTIVE_ADMINS;
@@ -151,6 +344,8 @@ Deno.serve(async (request: Request) => {
       return jsonError('Sessão inválida ou expirada.', 401);
     }
 
+    const requesterProfile = await getRequesterProfile(adminClient, requester.id);
+
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const action = String(body.action || 'list');
 
@@ -182,7 +377,11 @@ Deno.serve(async (request: Request) => {
       });
     }
 
-    if (requester.app_metadata?.role !== 'admin') {
+    if (requesterProfile?.is_active === false || !isUserActive(requester)) {
+      return jsonError('Acesso inativo.', 403);
+    }
+
+    if ((requesterProfile?.role || requester.app_metadata?.role) !== 'admin') {
       return jsonError('Somente administradores podem gerenciar contas de acesso.', 403);
     }
 
@@ -196,8 +395,9 @@ Deno.serve(async (request: Request) => {
         throw new Error(error.message);
       }
 
+      const directory = await fetchAccessDirectory(adminClient, data.users);
       const users = data.users
-          .map((user) => serializeUser(user, requester.id))
+          .map((user) => serializeUser(user, requester.id, directory))
           .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
       return jsonResponse({ users });
@@ -208,7 +408,7 @@ Deno.serve(async (request: Request) => {
       const email = String(body.email || '').trim().toLocaleLowerCase('pt-BR');
       const password = String(body.password || '');
       const role = String(body.role || 'recepcao');
-      const shopId = String(body.shopId || 'loja-1');
+      const shopId = role === 'admin' ? 'all' : String(body.shopId || '');
 
       if (!name || !email || !isStrongPassword(password)) {
         return jsonError(
@@ -217,8 +417,10 @@ Deno.serve(async (request: Request) => {
         );
       }
 
-      if (!ALLOWED_ROLES.has(role) || !ALLOWED_SHOPS.has(shopId)) {
-        return jsonError('Função ou filial inválida.', 400);
+      try {
+        await ensureValidShopAssignment(adminClient, role, shopId);
+      } catch (validationError) {
+        return jsonError(validationError instanceof Error ? validationError.message : 'Função ou filial inválida.', 400);
       }
 
       const { data, error } = await admin.createUser({
@@ -242,18 +444,31 @@ Deno.serve(async (request: Request) => {
         throw new Error(error?.message || 'Falha ao criar usuário.');
       }
 
+      await syncProfileAndAccess(adminClient, data.user, {
+        name,
+        role,
+        shopId,
+        isActive: true
+      });
+
       return jsonResponse({
-        user: serializeUser(data.user, requester.id)
+        user: serializeUser(data.user, requester.id, await fetchAccessDirectory(adminClient, [data.user]))
       }, 201);
     }
 
     if (action === 'update') {
       const userId = String(body.userId || '');
       const role = String(body.role || '');
-      const shopId = String(body.shopId || '');
+      const shopId = role === 'admin' ? 'all' : String(body.shopId || '');
 
-      if (!userId || !ALLOWED_ROLES.has(role) || !ALLOWED_SHOPS.has(shopId)) {
-        return jsonError('Usuário, função ou filial inválida.', 400);
+      if (!userId) {
+        return jsonError('Usuário inválido.', 400);
+      }
+
+      try {
+        await ensureValidShopAssignment(adminClient, role, shopId);
+      } catch (validationError) {
+        return jsonError(validationError instanceof Error ? validationError.message : 'Função ou filial inválida.', 400);
       }
 
       if (userId === requester.id && role !== 'admin') {
@@ -267,12 +482,13 @@ Deno.serve(async (request: Request) => {
       }
 
       const target = targetData.user;
+      const targetProfile = await getRequesterProfile(adminClient, userId);
 
       if (
-          target.app_metadata?.role === 'admin' &&
+          (targetProfile?.role || target.app_metadata?.role) === 'admin' &&
           role !== 'admin' &&
           isUserActive(target) &&
-          !(await canReduceAdminCoverage(admin))
+          !(await canReduceAdminCoverage(admin, adminClient))
       ) {
         return jsonError(
             'Mantenha pelo menos dois administradores ativos antes de alterar essa função.',
@@ -297,8 +513,15 @@ Deno.serve(async (request: Request) => {
         throw new Error(error?.message || 'Falha ao atualizar usuário.');
       }
 
+      await syncProfileAndAccess(adminClient, data.user, {
+        name: String(data.user.user_metadata?.name || target.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário'),
+        role,
+        shopId,
+        isActive: targetProfile?.is_active !== false && isUserActive(data.user)
+      });
+
       return jsonResponse({
-        user: serializeUser(data.user, requester.id)
+        user: serializeUser(data.user, requester.id, await fetchAccessDirectory(adminClient, [data.user]))
       });
     }
 
@@ -321,12 +544,13 @@ Deno.serve(async (request: Request) => {
       }
 
       const target = targetData.user;
+      const targetProfile = await getRequesterProfile(adminClient, userId);
 
       if (
           !isActive &&
-          target.app_metadata?.role === 'admin' &&
+          (targetProfile?.role || target.app_metadata?.role) === 'admin' &&
           isUserActive(target) &&
-          !(await canReduceAdminCoverage(admin))
+          !(await canReduceAdminCoverage(admin, adminClient))
       ) {
         return jsonError(
             'Mantenha pelo menos dois administradores ativos antes de inativar essa conta.',
@@ -346,8 +570,19 @@ Deno.serve(async (request: Request) => {
         throw new Error(error?.message || 'Falha ao alterar acesso.');
       }
 
+      const updatedProfile = await getRequesterProfile(adminClient, userId);
+      const updatedRole = String(updatedProfile?.role || data.user.app_metadata?.role || 'recepcao');
+      await syncProfileAndAccess(adminClient, data.user, {
+        name: String(updatedProfile?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário'),
+        role: updatedRole,
+        shopId: updatedRole === 'admin'
+            ? 'all'
+            : String(data.user.app_metadata?.shop_id || target.app_metadata?.shop_id || ''),
+        isActive
+      });
+
       return jsonResponse({
-        user: serializeUser(data.user, requester.id)
+        user: serializeUser(data.user, requester.id, await fetchAccessDirectory(adminClient, [data.user]))
       });
     }
 

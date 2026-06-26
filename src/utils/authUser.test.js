@@ -1,34 +1,96 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAuthUserProfile } from './authUser';
 
+const mocks = vi.hoisted(() => {
+  const state = {
+    profile: null,
+    access: null,
+    profileError: null,
+    accessError: null
+  };
+
+  const from = vi.fn((table) => {
+    const result = table === 'profiles'
+      ? { data: state.profile, error: state.profileError }
+      : { data: state.access, error: state.accessError };
+
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      single: vi.fn().mockResolvedValue(result)
+    };
+
+    return query;
+  });
+
+  return { from, state };
+});
+
+vi.mock('./supabaseClient', () => ({
+  supabase: {
+    from: mocks.from
+  }
+}));
+
 describe('getAuthUserProfile', () => {
-  it('usa app_metadata como fonte confiável de função e filial', () => {
-    const profile = getAuthUserProfile({
+  beforeEach(() => {
+    mocks.from.mockClear();
+    mocks.state.profile = null;
+    mocks.state.access = null;
+    mocks.state.profileError = null;
+    mocks.state.accessError = null;
+  });
+
+  it('usa profiles como fonte confiável de função administrativa', async () => {
+    mocks.state.profile = { role: 'admin' };
+
+    const profile = await getAuthUserProfile({
       id: 'user-1',
       email: 'admin@clinica.com',
-      app_metadata: { role: 'admin', shop_id: 'all' },
+      app_metadata: { role: 'recepcao', shop_id: 'loja-1' },
       user_metadata: { name: 'Administrador', role: 'recepcao', shop_id: 'loja-1' }
     });
 
     expect(profile.role).toBe('admin');
+    expect(profile.appRole).toBe('admin');
     expect(profile.shopId).toBe('all');
+    expect(profile.shopName).toBe('Todas as Filiais');
     expect(profile.name).toBe('Administrador');
+    expect(mocks.from).toHaveBeenCalledWith('profiles');
+    expect(mocks.from).not.toHaveBeenCalledWith('user_shop_access');
   });
 
-  it('não concede acesso administrativo a partir de user_metadata', () => {
-    const profile = getAuthUserProfile({
+  it('não concede acesso administrativo a partir de user_metadata ou app_metadata', async () => {
+    mocks.state.profile = { role: 'recepcao' };
+    mocks.state.access = {
+      shop_id: 'shop-uuid-1',
+      shops: { legacy_code: 'loja-1', name: 'Filial 1 - Centro' }
+    };
+
+    const profile = await getAuthUserProfile({
       id: 'user-2',
       email: 'usuario@clinica.com',
-      app_metadata: {},
+      app_metadata: { role: 'admin', shop_id: 'all' },
       user_metadata: { role: 'admin', shop_id: 'all' }
     });
 
     expect(profile.role).toBe('recepcao');
-    expect(profile.shopId).toBe('loja-1');
+    expect(profile.shopId).toBe('shop-uuid-1');
+    expect(profile.shopName).toBe('Filial 1 - Centro');
+    expect(profile.shopCode).toBe('loja-1');
+    expect(mocks.from).toHaveBeenCalledWith('profiles');
+    expect(mocks.from).toHaveBeenCalledWith('user_shop_access');
   });
 
-  it('exige a troca de senha somente quando app_metadata determina', () => {
-    const profile = getAuthUserProfile({
+  it('exige a troca de senha somente quando app_metadata determina', async () => {
+    mocks.state.profile = { role: 'recepcao' };
+    mocks.state.access = {
+      shop_id: 'shop-uuid-1',
+      shops: { legacy_code: 'loja-1', name: 'Filial 1 - Centro' }
+    };
+
+    const profile = await getAuthUserProfile({
       id: 'user-3',
       email: 'temporario@clinica.com',
       app_metadata: { must_change_password: true },
@@ -38,8 +100,14 @@ describe('getAuthUserProfile', () => {
     expect(profile.mustChangePassword).toBe(true);
   });
 
-  it('não confia em user_metadata para liberar ou exigir troca de senha', () => {
-    const profile = getAuthUserProfile({
+  it('não confia em user_metadata para liberar ou exigir troca de senha', async () => {
+    mocks.state.profile = { role: 'recepcao' };
+    mocks.state.access = {
+      shop_id: 'shop-uuid-1',
+      shops: { legacy_code: 'loja-1', name: 'Filial 1 - Centro' }
+    };
+
+    const profile = await getAuthUserProfile({
       id: 'user-4',
       email: 'usuario@clinica.com',
       app_metadata: {},

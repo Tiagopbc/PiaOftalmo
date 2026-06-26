@@ -2,11 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Appointment } from '../types';
 import { patientService } from '../services/patientService';
 import { appointmentService } from '../services/appointmentService';
-import { readLocalData } from '../utils/localData';
-import { INITIAL_APPOINTMENTS } from '../utils/mockData';
 import { useAuth } from './AuthContext';
 import { usePatients } from './PatientContext';
-import { v4 as uuidv4 } from 'uuid';
 
 interface AppointmentContextType {
   appointments: Appointment[];
@@ -18,15 +15,13 @@ interface AppointmentContextType {
 const AppointmentContext = createContext<AppointmentContextType>({} as AppointmentContextType);
 
 export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, isRemoteSession } = useAuth();
-  const { patients, updatePatient } = usePatients();
-  const [appointments, setAppointments] = useState<Appointment[]>(() => readLocalData('pia_demo_appointments_v2', INITIAL_APPOINTMENTS));
+  const { currentUser } = useAuth();
+  const { patients } = usePatients();
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!currentUser) return;
-    if (currentUser.isDemo || !isRemoteSession) return;
-
     setLoading(true);
     try {
       const data = await appointmentService.getAll();
@@ -36,17 +31,11 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } finally {
       setLoading(false);
     }
-  }, [currentUser, isRemoteSession]);
+  }, [currentUser]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  useEffect(() => {
-    if (currentUser?.isDemo || !isRemoteSession) {
-      localStorage.setItem('pia_demo_appointments_v2', JSON.stringify(appointments));
-    }
-  }, [appointments, currentUser, isRemoteSession]);
 
   const addAppointment = async (app: Partial<Appointment>) => {
     const patient = patients.find((item) => item.id === app.patientId);
@@ -54,76 +43,69 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return { success: false, error: 'Reative o paciente antes de criar um novo agendamento.' };
     }
 
-    const newId = `app-${uuidv4()}`;
-    const newApp: Appointment = {
+    const newApp: Partial<Appointment> = {
       ...app,
-      id: newId,
       status: 'confirmado',
-      shop_id: !currentUser?.shopId || currentUser?.shopId === 'all' ? 'loja-1' : currentUser.shopId
-    } as Appointment;
+      shop_id: currentUser?.shopId
+    };
 
-    setAppointments((prev) => [...prev, newApp]);
-
-    if (patient) {
-      const serviceName = app.serviceId || 'Consulta / Exame';
-      patientService.addTimelineEvent({
-        patientId: patient.id,
-        date: app.date,
-        type: 'appointment',
-        title: 'Agendamento Criado',
-        description: `${serviceName} agendado para o dia ${app.date} às ${app.time}hs.`,
-        shop_id: patient.shop_id
-      }).catch(console.error);
-    }
-
-    if (isRemoteSession) {
+    try {
       await appointmentService.create(newApp);
+      await loadData();
+      
+      if (patient) {
+        const serviceName = app.serviceId || 'Consulta / Exame';
+        await patientService.addTimelineEvent({
+          patientId: patient.id,
+          date: app.date,
+          type: 'appointment',
+          title: 'Agendamento Criado',
+          description: `${serviceName} agendado para o dia ${app.date} às ${app.time}hs.`,
+          shop_id: patient.shop_id
+        });
+      }
+      return { success: true, appointment: newApp as Appointment };
+    } catch (err: any) {
+      console.error('Erro ao criar agendamento remoto', err);
+      return { success: false, error: err.message };
     }
-
-    return { success: true, appointment: newApp };
   };
 
   const updateAppointmentStatus = async (id: string, status: string, cancelReason = '') => {
-    let appInfo: Appointment | null = null;
-    setAppointments((prev) =>
-      prev.map((app) => {
-        if (app.id === id) {
-          appInfo = { ...app, status, cancelReason };
-          return appInfo;
-        }
-        return app;
-      })
-    );
-
-    if (isRemoteSession) {
+    try {
       await appointmentService.updateStatus(id, status);
-    }
+      const appInfo = appointments.find(a => a.id === id);
+      await loadData();
 
-    if (appInfo) {
-      const patient = patients.find((p) => p.id === appInfo?.patientId);
-      if (patient) {
-        let title = 'Agendamento Atualizado';
-        let desc = `Consulta de ${appInfo.time} foi marcada como ${status}.`;
-        if (status === 'cancelado') {
-          title = 'Agendamento Cancelado';
-          desc = `Cancelado por motivo: ${cancelReason || 'Não informado'}.`;
-        } else if (status === 'atendido') {
-          title = 'Atendimento Realizado';
-          desc = `Paciente atendido e finalizado pelo profissional.`;
-        } else if (status === 'falta') {
-          title = 'Falta Registrada';
-          desc = `Paciente não compareceu ao horário agendado.`;
+      if (appInfo) {
+        const patient = patients.find((p) => p.id === appInfo?.patientId);
+        if (patient) {
+          let title = 'Agendamento Atualizado';
+          let desc = `Consulta de ${appInfo.time} foi marcada como ${status}.`;
+          if (status === 'cancelado') {
+            title = 'Agendamento Cancelado';
+            desc = `Cancelado por motivo: ${cancelReason || 'Não informado'}.`;
+          } else if (status === 'atendido') {
+            title = 'Atendimento Realizado';
+            desc = `Paciente atendido e finalizado pelo profissional.`;
+          } else if (status === 'falta') {
+            title = 'Falta Registrada';
+            desc = `Paciente não compareceu ao horário agendado.`;
+          }
+
+          await patientService.addTimelineEvent({
+            patientId: patient.id,
+            date: new Date().toISOString().split('T')[0],
+            type: 'appointment',
+            title,
+            description: desc,
+            shop_id: patient.shop_id
+          });
         }
-
-        patientService.addTimelineEvent({
-          patientId: patient.id,
-          date: new Date().toISOString().split('T')[0],
-          type: 'appointment',
-          title,
-          description: desc,
-          shop_id: patient.shop_id
-        }).catch(console.error);
       }
+    } catch (err) {
+      console.error('Erro ao atualizar status do agendamento', err);
+      throw err;
     }
   };
 

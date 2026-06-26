@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { saleService } from '../services/saleService';
+import { shopService } from '../services/shopService';
 import { useAppointments } from '../context/AppointmentContext';
 import { useApp } from '../context/AppContext';
 import { DollarSign, AlertCircle, CheckSquare } from 'lucide-react';
@@ -12,9 +13,18 @@ import { StatePanel } from './StatePanel';
 const FinanceManager = () => {
   const { currentUser } = useAuth();
   const [sales, setSales] = useState([]);
+  const [shops, setShops] = useState([]);
   useEffect(() => {
     saleService.getAll().then(setSales).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (currentUser?.shopId !== 'all') return;
+
+    shopService.getAll()
+      .then(setShops)
+      .catch(console.error);
+  }, [currentUser?.shopId]);
 
   const updatePurchaseStatus = async (patientId, purchaseId, status) => {
     try {
@@ -136,8 +146,11 @@ const FinanceManager = () => {
               onChange={(e) => setSelectedShopFilter(e.target.value)}
             >
               <option value="all">Todas as Filiais (Consolidado)</option>
-              <option value="loja-1">Filial 1 - Centro</option>
-              <option value="loja-2">Filial 2 - Shopping</option>
+              {shops.map((shop) => (
+                <option key={shop.id} value={shop.id}>
+                  {shop.name}{shop.isActive ? '' : ' (inativa)'}
+                </option>
+              ))}
             </select>
           </div>
         ) : null}

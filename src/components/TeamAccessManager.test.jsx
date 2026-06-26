@@ -3,11 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TeamAccessManager } from './TeamAccessManager';
 
 const mocks = vi.hoisted(() => ({
-  invokeAdminUsers: vi.fn()
+  invokeAdminUsers: vi.fn(),
+  getAllShops: vi.fn()
 }));
 
 vi.mock('../utils/adminUsers', () => ({
   invokeAdminUsers: mocks.invokeAdminUsers
+}));
+
+vi.mock('../services/shopService', () => ({
+  shopService: {
+    getAll: mocks.getAllShops
+  }
 }));
 
 vi.mock('../utils/supabaseClient', () => ({
@@ -41,7 +48,7 @@ const USERS = [
     name: 'Usuária Teste',
     email: 'teste@clinica.com',
     role: 'recepcao',
-    shopId: 'loja-1',
+    shopId: 'shop-uuid-1',
     isActive: true,
     isSelf: false,
     mustChangePassword: false
@@ -51,6 +58,14 @@ const USERS = [
 describe('TeamAccessManager', () => {
   beforeEach(() => {
     mocks.invokeAdminUsers.mockReset();
+    mocks.getAllShops.mockReset();
+    mocks.getAllShops.mockResolvedValue([
+      {
+        id: 'shop-uuid-1',
+        name: 'Filial 1 - Centro',
+        isActive: true
+      }
+    ]);
     mocks.invokeAdminUsers.mockImplementation(async ({ action }) => {
       if (action === 'list') return { users: USERS };
       return {};
@@ -61,8 +76,7 @@ describe('TeamAccessManager', () => {
     render(
       <TeamAccessManager currentUser={{
         id: 'admin-1',
-        role: 'admin',
-        isDemo: false
+        role: 'admin'
       }} />
     );
 

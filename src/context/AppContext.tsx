@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_PROFESSIONALS, INITIAL_ROOMS } from '../utils/mockData';
+import { PROFESSIONALS, ROOMS } from '../utils/constants';
 
 interface AppContextType {
   activeTab: string;
@@ -67,8 +67,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateClinicSettings,
         theme,
         toggleTheme,
-        professionals: INITIAL_PROFESSIONALS,
-        rooms: INITIAL_ROOMS
+        professionals: PROFESSIONALS,
+        rooms: ROOMS
       }}
     >
       {children}

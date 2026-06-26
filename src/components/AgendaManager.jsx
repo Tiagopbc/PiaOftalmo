@@ -4,7 +4,7 @@ import { usePatients } from '../context/PatientContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useWaitlist } from '../context/WaitlistContext';
 import { useApp } from '../context/AppContext';
-import { SERVICE_TYPES, PAYMENT_TYPES } from '../utils/mockData';
+import { SERVICE_TYPES, PAYMENT_TYPES } from '../utils/constants';
 import { timeToMinutes, isTimeInSlot, getTimeOptions } from '../utils/helpers';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';

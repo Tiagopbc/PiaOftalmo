@@ -25,8 +25,7 @@ const renderSettings = () => render(
       name: 'Colaborador',
       role: 'recepcao',
       appRole: 'recepcao',
-      shopId: 'shop-1',
-      isDemo: false
+      shopId: 'shop-1'
     },
     setCurrentUser: vi.fn()
   }}>

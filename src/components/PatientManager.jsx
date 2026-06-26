@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../context/PatientContext';
@@ -6,9 +6,11 @@ import { useApp } from '../context/AppContext';
 import { patientService } from '../services/patientService';
 import { prescriptionService } from '../services/prescriptionService';
 import { saleService } from '../services/saleService';
+import { attachmentService } from '../services/attachmentService';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
+import { ClinicalRecordTab } from './ClinicalRecordTab';
 import {
   Search,
   UserPlus,
@@ -22,7 +24,10 @@ import {
   Paperclip,
   Calendar,
   Printer,
-  FlaskConical
+  FlaskConical,
+  Download,
+  Lock,
+  Trash2
 } from 'lucide-react';
 
 const getPatientAge = (birthDate) => {
@@ -73,9 +78,7 @@ const PatientManager = () => {
   } = useApp();
   const dataStatus = { loading, error: '' };
 
-  const canManagePatientStatus = currentUser?.isDemo
-    ? currentUser.role === 'admin'
-    : currentUser?.appRole === 'admin';
+  const canManagePatientStatus = currentUser?.appRole === 'admin' || currentUser?.role === 'admin';
 
   const triggerPrintRx = (rx) => {
     setActivePrintData({
@@ -172,7 +175,9 @@ const PatientManager = () => {
   const [alertType, setAlertType] = useState('clinical');
 
   // Formulário de Anexo (simulado)
-  const [attachmentName, setAttachmentName] = useState('');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [isConfidential, setIsConfidential] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Filtrar pacientes
   const activePatientCount = patients.filter((patient) => patient.isActive !== false).length;
@@ -203,30 +208,36 @@ const PatientManager = () => {
   const [patientTimeline, setPatientTimeline] = useState([]);
   const [patientPrescriptions, setPatientPrescriptions] = useState([]);
   const [patientSales, setPatientSales] = useState([]);
+  const [patientAttachments, setPatientAttachments] = useState([]);
 
-  const loadPatientData = async (id) => {
+  const loadPatientData = useCallback(async (id) => {
     try {
       const timeline = await patientService.getTimelineEvents(id);
       const rx = await prescriptionService.getByPatient(id);
       const sales = await saleService.getByPatient(id);
+      const atts = await attachmentService.getPatientAttachments(id);
       setPatientTimeline(timeline);
       setPatientPrescriptions(rx);
       setPatientSales(sales);
+      setPatientAttachments(atts);
     } catch(e) {
       console.error(e);
     }
-  };
+  }, []);
+
+  const selectedPatientIdForData = selectedPatient?.id;
 
   useEffect(() => {
-    if (selectedPatient?.id) {
+    if (selectedPatientIdForData) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadPatientData(selectedPatient.id);
+      loadPatientData(selectedPatientIdForData);
     } else {
       setPatientTimeline([]);
       setPatientPrescriptions([]);
       setPatientSales([]);
+      setPatientAttachments([]);
     }
-  }, [selectedPatient?.id]);
+  }, [selectedPatientIdForData, loadPatientData]);
 
   const selectedPatientAge = getPatientAge(selectedPatient?.birthDate);
   const selectedLastEvent = getLastPatientEvent(selectedPatient);
@@ -378,33 +389,56 @@ const PatientManager = () => {
     } catch(e) { console.error(e); }
   };
 
-  const handleAddAttachment = (e) => {
+  const handleAddAttachment = async (e) => {
     e.preventDefault();
-    if (!attachmentName.trim() || !selectedPatient) return;
+    if (!uploadFile || !selectedPatient) return;
 
-    const newAtt = {
-      id: `att-${uuidv4()}`,
-      name: attachmentName,
-      date: new Date().toISOString().split('T')[0],
-      size: 'Simulado (KB)'
-    };
+    try {
+      setUploading(true);
+      await attachmentService.uploadAttachment(
+        selectedPatient.id,
+        selectedPatient.shop_id || currentUser?.shopId,
+        uploadFile,
+        isConfidential
+      );
+      
+      // Reload attachments
+      const atts = await attachmentService.getPatientAttachments(selectedPatient.id);
+      setPatientAttachments(atts);
+      
+      setUploadFile(null);
+      setIsConfidential(false);
+      
+      // Opcional: adicionar timeline event
+      // ...
+    } catch (error) {
+      console.error('Error in handleAddAttachment:', error);
+      alert('Erro ao fazer upload. Você tem permissão para isso?');
+    } finally {
+      setUploading(false);
+    }
+  };
 
-    const updated = {
-      ...selectedPatient,
-      attachments: [...(selectedPatient.attachments || []), newAtt],
-      timeline: [
-        {
-          id: `t-${uuidv4()}`,
-          date: newAtt.date,
-          type: 'system',
-          title: 'Arquivo Anexado',
-          desc: `Documento "${attachmentName}" anexado com sucesso.`
-        },
-        ...patientTimeline
-      ]
-    };
-    updatePatient(updated);
-    setAttachmentName('');
+  const handleDownloadAttachment = async (doc) => {
+    try {
+      const url = await attachmentService.getSignedUrl(doc.storage_path);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      alert('Acesso Negado ou arquivo não encontrado.');
+    }
+  };
+
+  const handleDeleteAttachment = async (doc) => {
+    if (!confirm('Deseja excluir este anexo?')) return;
+    try {
+      await attachmentService.deleteAttachment(doc.id, doc.storage_path);
+      const atts = await attachmentService.getPatientAttachments(selectedPatient.id);
+      setPatientAttachments(atts);
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+      alert('Erro ao excluir anexo. Sem permissão?');
+    }
   };
 
   const handlePatientStatusChange = async (patient, nextIsActive) => {
@@ -944,12 +978,18 @@ const PatientManager = () => {
                 <button type="button" aria-pressed={activeSubTab === 'purchases'} className={`tab-btn ${activeSubTab === 'purchases' ? 'active' : ''}`} onClick={() => setActiveSubTab('purchases')}>
                   Compras / OS ({patientSales?.length || 0})
                 </button>
+                <button type="button" aria-pressed={activeSubTab === 'clinical'} className={`tab-btn ${activeSubTab === 'clinical' ? 'active' : ''}`} onClick={() => setActiveSubTab('clinical')}>
+                  Prontuário Clínico
+                </button>
                 <button type="button" aria-pressed={activeSubTab === 'docs'} className={`tab-btn ${activeSubTab === 'docs' ? 'active' : ''}`} onClick={() => setActiveSubTab('docs')}>
                   Documentos ({selectedPatient.attachments?.length || 0})
                 </button>
               </div>
 
               {/* Conteúdo das Abas */}
+              {activeSubTab === 'clinical' && (
+                <ClinicalRecordTab patientId={selectedPatient.id} />
+              )}
               {activeSubTab === 'timeline' && (
                 <div>
                   <h4 style={{ fontSize: '15px', marginBottom: '12px' }}>Linha do Tempo do Paciente</h4>
@@ -1305,31 +1345,56 @@ const PatientManager = () => {
               {activeSubTab === 'docs' && (
                 <div>
                   <h4 style={{ fontSize: '15px', marginBottom: '12px' }}>Anexos e Documentos</h4>
-                  <form onSubmit={handleAddAttachment} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  <form onSubmit={handleAddAttachment} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
                     <input
-                      type="text"
+                      type="file"
                       className="form-control"
-                      placeholder="Nome do laudo/documento..."
                       required
-                      value={attachmentName}
-                      onChange={(e) => setAttachmentName(e.target.value)}
+                      onChange={(e) => setUploadFile(e.target.files[0])}
+                      style={{ flex: 1, minWidth: '200px' }}
                     />
-                    <button type="submit" className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Paperclip size={14} /> Anexar
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isConfidential} 
+                        onChange={(e) => setIsConfidential(e.target.checked)} 
+                      />
+                      <Lock size={14} color="var(--danger)" /> Sigiloso
+                    </label>
+                    <button type="submit" disabled={uploading} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Paperclip size={14} /> {uploading ? 'Enviando...' : 'Anexar'}
                     </button>
                   </form>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {selectedPatient.attachments && selectedPatient.attachments.length > 0 ? (
-                      selectedPatient.attachments.map((doc) => (
+                    {patientAttachments && patientAttachments.length > 0 ? (
+                      patientAttachments.map((doc) => (
                         <div key={doc.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)', fontSize: '13px' }}>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <FileText size={16} color="var(--primary)" />
+                            {doc.is_confidential ? <Lock size={16} color="var(--danger)" title="Sigiloso" /> : <FileText size={16} color="var(--primary)" />}
                             <strong>{doc.name}</strong>
                           </span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            {doc.date}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {new Date(doc.created_at).toLocaleDateString('pt-BR')}
+                            </span>
+                            <button 
+                              className="btn btn-secondary btn-sm" 
+                              style={{ padding: '4px' }} 
+                              onClick={() => handleDownloadAttachment(doc)}
+                              title="Baixar Arquivo"
+                            >
+                              <Download size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-sm" 
+                              style={{ padding: '4px', background: 'transparent', color: 'var(--danger)', border: 'none' }} 
+                              onClick={() => handleDeleteAttachment(doc)}
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.patient_timeline_events (
     description TEXT,
     date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     shop_id UUID REFERENCES public.shops(id) ON DELETE CASCADE,
+    legacy_source_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.prescriptions (
     addition VARCHAR(20),
     notes TEXT,
     shop_id UUID REFERENCES public.shops(id) ON DELETE CASCADE,
+    legacy_source_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -87,71 +89,184 @@ CREATE TABLE IF NOT EXISTS public.optical_orders (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 6.1. Arquivo de segurança para os payloads antigos em JSONB.
+-- Mesmo após migrar para tabelas relacionais, os campos originais ficam preservados
+-- aqui e também continuam em public.patients durante a fase de estabilização.
+CREATE TABLE IF NOT EXISTS public.patient_legacy_payloads (
+    patient_id TEXT PRIMARY KEY REFERENCES public.patients(id) ON DELETE CASCADE,
+    timeline JSONB,
+    prescriptions JSONB,
+    purchases JSONB,
+    payments JSONB,
+    archived_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE public.patient_timeline_events
+    ADD COLUMN IF NOT EXISTS legacy_source_id TEXT;
+
+ALTER TABLE public.prescriptions
+    ADD COLUMN IF NOT EXISTS legacy_source_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS patient_timeline_events_legacy_source_uid
+    ON public.patient_timeline_events (patient_id, legacy_source_id)
+    WHERE legacy_source_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS prescriptions_legacy_source_uid
+    ON public.prescriptions (patient_id, legacy_source_id)
+    WHERE legacy_source_id IS NOT NULL;
+
 -- 7. Migração de Dados Existentes (JSONB para Relacional)
 DO $$
 DECLARE
-    -- Variáveis se necessário
+    has_timeline BOOLEAN;
+    has_prescriptions BOOLEAN;
+    has_purchases BOOLEAN;
+    has_payments BOOLEAN;
 BEGIN
-    -- Migrar Timeline
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='timeline') THEN
-        INSERT INTO public.patient_timeline_events (patient_id, type, title, description, date, shop_id)
-        SELECT 
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'timeline'
+    ) INTO has_timeline;
+
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'prescriptions'
+    ) INTO has_prescriptions;
+
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'purchases'
+    ) INTO has_purchases;
+
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'payments'
+    ) INTO has_payments;
+
+    IF has_timeline OR has_prescriptions OR has_purchases OR has_payments THEN
+        EXECUTE format(
+            'INSERT INTO public.patient_legacy_payloads (patient_id, timeline, prescriptions, purchases, payments)
+             SELECT id, %s, %s, %s, %s
+             FROM public.patients
+             ON CONFLICT (patient_id) DO UPDATE SET
+                timeline = EXCLUDED.timeline,
+                prescriptions = EXCLUDED.prescriptions,
+                purchases = EXCLUDED.purchases,
+                payments = EXCLUDED.payments,
+                archived_at = CURRENT_TIMESTAMP',
+            CASE WHEN has_timeline THEN 'timeline' ELSE 'NULL::jsonb' END,
+            CASE WHEN has_prescriptions THEN 'prescriptions' ELSE 'NULL::jsonb' END,
+            CASE WHEN has_purchases THEN 'purchases' ELSE 'NULL::jsonb' END,
+            CASE WHEN has_payments THEN 'payments' ELSE 'NULL::jsonb' END
+        );
+    END IF;
+END $$;
+
+-- Migrar Timeline de forma idempotente
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'timeline'
+    ) THEN
+        INSERT INTO public.patient_timeline_events (
+            patient_id,
+            type,
+            title,
+            description,
+            date,
+            shop_id,
+            legacy_source_id
+        )
+        SELECT
             p.id,
             COALESCE(event->>'type', 'system'),
             COALESCE(event->>'title', 'Sem título'),
-            event->>'desc',
-            COALESCE((event->>'date')::timestamp with time zone, CURRENT_TIMESTAMP),
-            CASE WHEN p.shop_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN p.shop_id::uuid ELSE NULL END
+            COALESCE(event->>'desc', event->>'description'),
+            CASE
+                WHEN COALESCE(event->>'date', '') ~ '^\d{4}-\d{2}-\d{2}' THEN (event->>'date')::timestamp with time zone
+                ELSE CURRENT_TIMESTAMP
+            END,
+            public.resolve_shop_id((p.shop_id)::TEXT),
+            COALESCE(event->>'id', md5(event::TEXT))
         FROM public.patients p
         CROSS JOIN LATERAL jsonb_array_elements(
             CASE WHEN jsonb_typeof(p.timeline) = 'array' THEN p.timeline ELSE '[]'::jsonb END
         ) AS event
-        WHERE p.timeline IS NOT NULL;
+        WHERE p.timeline IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.patient_timeline_events existing
+              WHERE existing.patient_id = p.id
+                AND existing.legacy_source_id = COALESCE(event->>'id', md5(event::TEXT))
+          );
     END IF;
+END $$;
 
-    -- Migrar Prescriptions
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='prescriptions') THEN
-        INSERT INTO public.prescriptions (patient_id, date, glasses_type, lens_type, od_sph, od_cyl, od_axis, os_sph, os_cyl, os_axis, addition, notes, shop_id)
-        SELECT 
+-- Migrar Prescriptions de forma idempotente
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'patients' AND column_name = 'prescriptions'
+    ) THEN
+        INSERT INTO public.prescriptions (
+            patient_id,
+            date,
+            glasses_type,
+            lens_type,
+            od_sph,
+            od_cyl,
+            od_axis,
+            os_sph,
+            os_cyl,
+            os_axis,
+            addition,
+            notes,
+            shop_id,
+            legacy_source_id
+        )
+        SELECT
             p.id,
-            COALESCE((rx->>'date')::date, CURRENT_DATE),
+            CASE
+                WHEN COALESCE(rx->>'date', '') ~ '^\d{4}-\d{2}-\d{2}' THEN (rx->>'date')::date
+                ELSE CURRENT_DATE
+            END,
             rx->>'glassesType',
             rx->>'lensType',
-            rx->'longe'->'od'->>'esferico',
-            rx->'longe'->'od'->>'cilindrico',
-            rx->'longe'->'od'->>'eixo',
-            rx->'longe'->'oe'->>'esferico',
-            rx->'longe'->'oe'->>'cilindrico',
-            rx->'longe'->'oe'->>'eixo',
-            rx->>'adicao',
+            COALESCE(rx->'longe'->'od'->>'esferico', rx->'od'->>'esferico'),
+            COALESCE(rx->'longe'->'od'->>'cilindrico', rx->'od'->>'cilindrico'),
+            COALESCE(rx->'longe'->'od'->>'eixo', rx->'od'->>'eixo'),
+            COALESCE(rx->'longe'->'oe'->>'esferico', rx->'oe'->>'esferico'),
+            COALESCE(rx->'longe'->'oe'->>'cilindrico', rx->'oe'->>'cilindrico'),
+            COALESCE(rx->'longe'->'oe'->>'eixo', rx->'oe'->>'eixo'),
+            COALESCE(rx->>'adicao', rx->'od'->>'adicao', rx->'oe'->>'adicao'),
             rx->>'notes',
-            CASE WHEN p.shop_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN p.shop_id::uuid ELSE NULL END
+            public.resolve_shop_id((p.shop_id)::TEXT),
+            COALESCE(rx->>'id', md5(rx::TEXT))
         FROM public.patients p
         CROSS JOIN LATERAL jsonb_array_elements(
             CASE WHEN jsonb_typeof(p.prescriptions) = 'array' THEN p.prescriptions ELSE '[]'::jsonb END
         ) AS rx
-        WHERE p.prescriptions IS NOT NULL;
-    END IF;
-
-    -- Migrar Purchases/Sales (Simplificado para Sales e Optical Orders)
-    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='purchases') THEN
-        -- Como purchase tem item e value, vamos inserir na sales, sale_items e optical_orders
-        -- Usaremos um CTE ou inserção direta não é tão fácil. 
-        -- Para simplificar na migration SQL, não é perfeitamente relacional sem IDs mapeados, 
-        -- mas vamos focar nas queries principais para Sales e Orders se houver ID.
-        -- O Supabase já suporta IDs gerados, mas sem UUID pre-gerado é difícil linkar sales com items.
-        -- Aqui vamos deixar em branco os itens para não complicar excessivamente no DO block,
-        -- ou você pode criar com CTEs depois, mas como as tabelas antigas eram locais ou mock, 
-        -- isso cobrirá a maioria do uso real ou será ignorado se não tiver compras.
+        WHERE p.prescriptions IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.prescriptions existing
+              WHERE existing.patient_id = p.id
+                AND existing.legacy_source_id = COALESCE(rx->>'id', md5(rx::TEXT))
+          );
     END IF;
 END $$;
 
--- 8. Limpeza da Tabela Patients
-ALTER TABLE public.patients 
-  DROP COLUMN IF EXISTS timeline,
-  DROP COLUMN IF EXISTS prescriptions,
-  DROP COLUMN IF EXISTS purchases,
-  DROP COLUMN IF EXISTS payments;
+-- IMPORTANTE:
+-- Não removemos mais timeline, prescriptions, purchases ou payments de public.patients
+-- nesta fase. A aplicação ainda está em transição e esses campos funcionam como
+-- rollback/dupla leitura até a validação completa em produção.
+-- A remoção física deve acontecer somente em uma migration futura, depois de:
+-- 1) backup validado;
+-- 2) contagem de registros migrados conferida;
+-- 3) versão do frontend usando apenas as tabelas relacionais publicada;
+-- 4) janela de reversão encerrada.
 
 -- 8. RLS E POLÍTICAS DE SEGURANÇA
 
@@ -161,6 +276,17 @@ ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sale_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.optical_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.patient_legacy_payloads ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins leem payloads legados" ON public.patient_legacy_payloads;
+CREATE POLICY "Admins leem payloads legados" ON public.patient_legacy_payloads
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1
+            FROM public.profiles
+            WHERE id = auth.uid() AND role = 'admin'
+        )
+    );
 
 -- patient_timeline_events
 DROP POLICY IF EXISTS "Acesso Timeline da filial" ON public.patient_timeline_events;

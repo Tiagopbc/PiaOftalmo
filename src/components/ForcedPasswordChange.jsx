@@ -43,7 +43,8 @@ export const ForcedPasswordChange = () => {
         throw signInError || new Error('Não foi possível iniciar a nova sessão.');
       }
 
-      setCurrentUser(getAuthUserProfile(data.user));
+      const profile = await getAuthUserProfile(data.user);
+      setCurrentUser(profile);
     } catch (changeError) {
       setError(
         passwordChanged
