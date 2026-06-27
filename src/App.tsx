@@ -199,6 +199,7 @@ function App() {
 
         {/* Loja Ativa Tag */}
         <div
+          className="active-shop-badge"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -211,6 +212,7 @@ function App() {
             color: '#94a3b8',
             border: '1px solid rgba(255,255,255,0.03)'
           }}
+          title={`Loja: ${getShopName(currentUser.shopId, currentUser.shopName)}`}
         >
           <Store size={15} color="var(--primary)" />
           <span>Loja: <strong>{getShopName(currentUser.shopId, currentUser.shopName)}</strong></span>
@@ -224,6 +226,7 @@ function App() {
               className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
               onClick={() => setActiveTab(item.id)}
               aria-current={activeTab === item.id ? 'page' : undefined}
+              title={item.label}
             >
               {item.icon}
               {item.label}
@@ -232,7 +235,7 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="sidebar-footer-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="user-profile">
               <div className="user-avatar" style={{ textTransform: 'uppercase' }} aria-hidden="true">
                 {currentUser.name ? currentUser.name[0] : '?'}
@@ -245,7 +248,7 @@ function App() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '4px' }}>
+            <div className="sidebar-footer-actions" style={{ display: 'flex', gap: '4px' }}>
               <button
                 type="button"
                 onClick={toggleTheme}

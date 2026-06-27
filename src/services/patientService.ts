@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { Patient } from '../types';
 
@@ -30,10 +31,22 @@ export const patientService = {
     if (error) throw error;
     return (data || []).map(mapPatientToCamel) as Patient[];
   },
-  async create(patient: Partial<Patient>): Promise<void> {
-    if (!isSupabaseConfigured) return;
-    const { error } = await supabase.from('patients').insert(mapPatientToSnake(patient));
+  async create(patient: Partial<Patient>): Promise<Patient> {
+    if (!isSupabaseConfigured) throw new Error('Supabase não configurado.');
+    const patientToInsert = {
+      id: patient.id || uuidv4(),
+      ...patient
+    };
+
+    const { data, error } = await supabase
+      .from('patients')
+      .insert(mapPatientToSnake(patientToInsert))
+      .select('*')
+      .single();
     if (error) throw error;
+    const createdPatient = mapPatientToCamel(data);
+    if (!createdPatient) throw new Error('Não foi possível recuperar o paciente criado.');
+    return createdPatient;
   },
   async update(id: string, patient: Partial<Patient>): Promise<void> {
     if (!isSupabaseConfigured) return;

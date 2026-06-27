@@ -36,17 +36,26 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [loadData]);
 
   const addPatient = async (patient: Partial<Patient>) => {
+    const userShopId = currentUser?.shopId && currentUser.shopId !== 'all'
+      ? currentUser.shopId
+      : undefined;
+    const resolvedShopId = patient.shop_id || userShopId;
+
+    if (!resolvedShopId) {
+      throw new Error('Selecione a unidade responsável pelo cadastro do paciente.');
+    }
+
     const newPatient: Partial<Patient> = {
       ...patient,
       isActive: true,
-      shop_id: currentUser?.shopId
+      shop_id: resolvedShopId
     };
 
     try {
       const createdPatient = await patientService.create(newPatient);
       // Recarrega a lista para obter o ID gerado pelo banco e os dados exatos
       await loadData();
-      return createdPatient as unknown as Patient; // Note: create doesn't currently return the object, we should probably change service to return it.
+      return createdPatient;
     } catch (err) {
       console.error('Erro ao criar paciente remoto', err);
       throw err;
