@@ -7,6 +7,8 @@ import { patientService } from '../services/patientService';
 import { prescriptionService } from '../services/prescriptionService';
 import { saleService } from '../services/saleService';
 import { attachmentService } from '../services/attachmentService';
+import { shopService, type Shop } from '../services/shopService';
+import { getShopDisplayName } from '../utils/shops';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
@@ -37,6 +39,57 @@ type PatientWithLegacyData = Patient & {
   alerts?: LegacyRecord[];
 };
 type PatientStatusFilter = 'active' | 'inactive' | 'all';
+
+const onlyDigits = (value?: string | null) => String(value || '').replace(/\D/g, '');
+
+const formatCpf = (value?: string | null) => {
+  const digits = onlyDigits(value).slice(0, 11);
+  return digits
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+};
+
+const formatBrazilPhone = (value?: string | null) => {
+  const digits = onlyDigits(value).slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
+
+const getErrorMessage = (error: unknown) => {
+  const fallback = 'Erro inesperado.';
+  const rawMessage = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message || '')
+      : '';
+  const details = typeof error === 'object' && error !== null && 'details' in error
+    ? String((error as { details?: unknown }).details || '')
+    : '';
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code || '')
+    : '';
+  const message = [rawMessage, details].filter(Boolean).join(' ');
+  const normalized = message.toLowerCase();
+
+  if (code === '23505' || normalized.includes('duplicate key') || normalized.includes('unique constraint')) {
+    return 'Já existe um paciente cadastrado com este CPF.';
+  }
+
+  if (normalized.includes('row-level security') || normalized.includes('violates row-level security')) {
+    return 'Sem permissão para cadastrar paciente nesta unidade. Confira a unidade responsável.';
+  }
+
+  if (normalized.includes('schema cache') || normalized.includes('could not find')) {
+    return 'O banco ainda não reconhece um dos campos enviados. Atualize o schema/migrations antes de tentar novamente.';
+  }
+
+  return rawMessage || details || fallback;
+};
 
 const getPatientAge = (birthDate?: string) => {
   if (!birthDate) return null;
@@ -146,6 +199,10 @@ const PatientManager = () => {
     alerts: [],
     notes: ''
   });
+  const [phoneIsWhatsapp, setPhoneIsWhatsapp] = useState(false);
+  const [savingPatient, setSavingPatient] = useState(false);
+  const [availableShops, setAvailableShops] = useState<Shop[]>([]);
+  const [selectedNewPatientShopId, setSelectedNewPatientShopId] = useState('');
 
   // Formulário de receita
   const [showRxForm, setShowRxForm] = useState(false);
@@ -187,15 +244,50 @@ const PatientManager = () => {
   const [isConfidential, setIsConfidential] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const currentUserShopId = currentUser?.shopId || '';
+  const shouldChoosePatientShop = !currentUserShopId || currentUserShopId === 'all';
+  const fixedPatientShopId = shouldChoosePatientShop ? '' : currentUserShopId;
+
+  useEffect(() => {
+    if (!shouldChoosePatientShop) {
+      setSelectedNewPatientShopId(fixedPatientShopId);
+      setAvailableShops([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    shopService.getAll()
+      .then((shops) => {
+        if (cancelled) return;
+        const activeShops = shops.filter((shop) => shop.isActive);
+        setAvailableShops(activeShops);
+        setSelectedNewPatientShopId((currentShopId) => (
+          activeShops.some((shop) => shop.id === currentShopId)
+            ? currentShopId
+            : activeShops[0]?.id || ''
+        ));
+      })
+      .catch((error) => {
+        console.error('Erro ao carregar unidades para cadastro de paciente', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldChoosePatientShop, fixedPatientShopId]);
+
   // Filtrar pacientes
   const activePatientCount = patients.filter((patient) => patient.isActive !== false).length;
   const inactivePatientCount = patients.length - activePatientCount;
 
   const filteredPatients = patients.filter((p) => {
     const term = searchTerm.toLowerCase();
+    const numericTerm = onlyDigits(term);
     const matchesSearch = (
       (p.name || '').toLowerCase().includes(term) ||
       (p.cpf || '').toLowerCase().includes(term) ||
+      (numericTerm.length > 0 && onlyDigits(p.cpf).includes(numericTerm)) ||
       (p.rg || '').toLowerCase().includes(term)
     );
     const isActive = p.isActive !== false;
@@ -250,31 +342,92 @@ const PatientManager = () => {
   const selectedPatientAge = getPatientAge(selectedPatient?.birthDate);
   const selectedLastEvent = getLastPatientEvent(selectedPatient);
 
+  const handleNewPatientPhoneChange = (value: string) => {
+    const formattedPhone = formatBrazilPhone(value);
+    setNewPatient((current) => ({
+      ...current,
+      phone: formattedPhone,
+      whatsapp: phoneIsWhatsapp ? formattedPhone : current.whatsapp
+    }));
+  };
+
+  const handlePhoneIsWhatsappChange = (checked: boolean) => {
+    setPhoneIsWhatsapp(checked);
+    setNewPatient((current) => ({
+      ...current,
+      whatsapp: checked ? current.phone : current.whatsapp
+    }));
+  };
+
   const handleCreatePatient = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!newPatient.name || !newPatient.birthDate) {
-      alert('Nome e Data de Nascimento são obrigatórios!');
+    const cpfDigits = onlyDigits(newPatient.cpf);
+    const targetShopId = shouldChoosePatientShop ? selectedNewPatientShopId : fixedPatientShopId;
+
+    if (!newPatient.name.trim() || !newPatient.birthDate) {
+      alert('Nome e data de nascimento são obrigatórios.');
       return;
     }
-    const created = await addPatient(newPatient);
-    setSelectedPatientId(created.id);
-    setShowAddForm(false);
-    // Reset form
-    setNewPatient({
-      name: '',
-      cpf: '',
-      rg: '',
-      birthDate: '',
-      gender: 'Masculino',
-      phone: '',
-      whatsapp: '',
-      email: '',
-      address: '',
-      isMinor: false,
-      guardian: { name: '', cpf: '', phone: '' },
-      alerts: [],
-      notes: ''
-    });
+
+    if (cpfDigits.length !== 11) {
+      alert('Informe o CPF com 11 números no formato 000.000.000-00.');
+      return;
+    }
+
+    if (!targetShopId) {
+      alert('Selecione a unidade responsável pelo cadastro do paciente.');
+      return;
+    }
+
+    if (newPatient.isMinor && !newPatient.guardian.name.trim()) {
+      alert('Informe o nome do responsável legal.');
+      return;
+    }
+
+    const patientPayload = {
+      ...newPatient,
+      name: newPatient.name.trim(),
+      cpf: formatCpf(newPatient.cpf),
+      phone: formatBrazilPhone(newPatient.phone),
+      whatsapp: phoneIsWhatsapp
+        ? formatBrazilPhone(newPatient.phone)
+        : formatBrazilPhone(newPatient.whatsapp),
+      guardian: {
+        ...newPatient.guardian,
+        name: newPatient.guardian.name.trim(),
+        cpf: formatCpf(newPatient.guardian.cpf),
+        phone: formatBrazilPhone(newPatient.guardian.phone)
+      },
+      shop_id: targetShopId
+    };
+
+    try {
+      setSavingPatient(true);
+      const created = await addPatient(patientPayload);
+      setSelectedPatientId(created.id);
+      setShowAddForm(false);
+      // Reset form
+      setNewPatient({
+        name: '',
+        cpf: '',
+        rg: '',
+        birthDate: '',
+        gender: 'Masculino',
+        phone: '',
+        whatsapp: '',
+        email: '',
+        address: '',
+        isMinor: false,
+        guardian: { name: '', cpf: '', phone: '' },
+        alerts: [],
+        notes: ''
+      });
+      setPhoneIsWhatsapp(false);
+    } catch (error) {
+      alert(`Não foi possível salvar o paciente: ${getErrorMessage(error)}`);
+    } finally {
+      setSavingPatient(false);
+    }
   };
 
   const handleAddAlert = (e: FormEvent<HTMLFormElement>) => {
@@ -659,6 +812,43 @@ const PatientManager = () => {
             </div>
 
             <form onSubmit={handleCreatePatient}>
+              {shouldChoosePatientShop ? (
+                <div className="form-group">
+                  <label htmlFor="patient-shop">Unidade responsável*</label>
+                  <select
+                    id="patient-shop"
+                    className="form-control"
+                    required
+                    value={selectedNewPatientShopId}
+                    onChange={(e) => setSelectedNewPatientShopId(e.target.value)}
+                  >
+                    {availableShops.length === 0 ? (
+                      <option value="">Nenhuma unidade ativa encontrada</option>
+                    ) : (
+                      availableShops.map((shop) => (
+                        <option key={shop.id} value={shop.id}>{shop.name}</option>
+                      ))
+                    )}
+                  </select>
+                  <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                    Como administrador, você está na visão consolidada. Por isso o paciente precisa ser vinculado a uma unidade real.
+                  </small>
+                </div>
+              ) : (
+                <div className="form-group">
+                  <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '6px' }}>
+                    Unidade do cadastro
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={getShopDisplayName(currentUser?.shopId, currentUser?.shopName)}
+                    disabled
+                    style={{ backgroundColor: 'var(--bg-primary)', cursor: 'not-allowed' }}
+                  />
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Nome Completo*</label>
                 <input
@@ -697,14 +887,22 @@ const PatientManager = () => {
 
               <div className="form-grid">
                 <div className="form-group">
-                  <label>CPF</label>
+                  <label htmlFor="patient-cpf">CPF*</label>
                   <input
+                    id="patient-cpf"
                     type="text"
                     className="form-control"
-                    placeholder="xxx.xxx.xxx-xx"
+                    placeholder="000.000.000-00"
+                    inputMode="numeric"
+                    maxLength={14}
+                    required
+                    aria-describedby="patient-cpf-help"
                     value={newPatient.cpf}
-                    onChange={(e) => setNewPatient({ ...newPatient, cpf: e.target.value })}
+                    onChange={(e) => setNewPatient({ ...newPatient, cpf: formatCpf(e.target.value) })}
                   />
+                  <small id="patient-cpf-help" style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                    O sistema aceita 11 números e formata automaticamente.
+                  </small>
                 </div>
                 <div className="form-group">
                   <label>RG</label>
@@ -724,9 +922,20 @@ const PatientManager = () => {
                     type="text"
                     className="form-control"
                     placeholder="(xx) xxxxx-xxxx"
+                    inputMode="tel"
+                    maxLength={15}
                     value={newPatient.phone}
-                    onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })}
+                    onChange={(e) => handleNewPatientPhoneChange(e.target.value)}
                   />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontWeight: 500, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={phoneIsWhatsapp}
+                      onChange={(e) => handlePhoneIsWhatsappChange(e.target.checked)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    Este número também é WhatsApp
+                  </label>
                 </div>
                 <div className="form-group">
                   <label>WhatsApp</label>
@@ -734,8 +943,11 @@ const PatientManager = () => {
                     type="text"
                     className="form-control"
                     placeholder="(xx) xxxxx-xxxx"
+                    inputMode="tel"
+                    maxLength={15}
                     value={newPatient.whatsapp}
-                    onChange={(e) => setNewPatient({ ...newPatient, whatsapp: e.target.value })}
+                    onChange={(e) => setNewPatient({ ...newPatient, whatsapp: formatBrazilPhone(e.target.value) })}
+                    disabled={phoneIsWhatsapp}
                   />
                 </div>
               </div>
@@ -796,11 +1008,14 @@ const PatientManager = () => {
                       <input
                         type="text"
                         className="form-control"
+                        placeholder="000.000.000-00"
+                        inputMode="numeric"
+                        maxLength={14}
                         value={newPatient.guardian.cpf}
                         onChange={(e) =>
                           setNewPatient({
                             ...newPatient,
-                            guardian: { ...newPatient.guardian, cpf: e.target.value }
+                            guardian: { ...newPatient.guardian, cpf: formatCpf(e.target.value) }
                           })
                         }
                       />
@@ -810,11 +1025,14 @@ const PatientManager = () => {
                       <input
                         type="text"
                         className="form-control"
+                        placeholder="(xx) xxxxx-xxxx"
+                        inputMode="tel"
+                        maxLength={15}
                         value={newPatient.guardian.phone}
                         onChange={(e) =>
                           setNewPatient({
                             ...newPatient,
-                            guardian: { ...newPatient.guardian, phone: e.target.value }
+                            guardian: { ...newPatient.guardian, phone: formatBrazilPhone(e.target.value) }
                           })
                         }
                       />
@@ -833,8 +1051,13 @@ const PatientManager = () => {
                 ></textarea>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                Salvar Cadastro
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                disabled={savingPatient || (shouldChoosePatientShop && !selectedNewPatientShopId)}
+              >
+                {savingPatient ? 'Salvando cadastro...' : 'Salvar Cadastro'}
               </button>
             </form>
           </div>

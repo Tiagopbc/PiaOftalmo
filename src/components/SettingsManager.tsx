@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useApp } from '../context/AppContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import { User, Users, Building2, Save, Lock, Eye, EyeOff, Store } from 'lucide-react';
+import { User, Users, Save, Lock, Eye, EyeOff, Store } from 'lucide-react';
 import { isStrongPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwords';
 import { getShopDisplayName } from '../utils/shops';
 import PageHeader from './PageHeader';
@@ -15,17 +14,9 @@ const getErrorMessage = (error: unknown) =>
 
 const SettingsManager = () => {
   const { currentUser, setCurrentUser } = useAuth();
-  const { clinicSettings, updateClinicSettings } = useApp();
 
   const isAdmin = currentUser?.role === 'admin';
-  const [activeSubTab, setActiveSubTab] = useState(() => isAdmin ? 'clinic' : 'account'); // clinic, shops, team, account
-
-  // State para Dados da Clínica
-  const [clinicName, setClinicName] = useState(clinicSettings.name || '');
-  const [clinicAddress, setClinicAddress] = useState(clinicSettings.address || '');
-  const [clinicCep, setClinicCep] = useState(clinicSettings.cep || '');
-  const [clinicPhone, setClinicPhone] = useState(clinicSettings.phone || '');
-  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState(() => isAdmin ? 'shops' : 'account'); // shops, team, account
 
   // State para Personalização de Conta do Usuário
   const [profileName, setProfileName] = useState(currentUser?.name || '');
@@ -106,27 +97,13 @@ const SettingsManager = () => {
     }
   };
 
-  // Handler para Salvar Dados da Clínica
-  const handleSaveClinicSettings = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoadingSettings(true);
-    updateClinicSettings({
-      name: clinicName,
-      address: clinicAddress,
-      cep: clinicCep,
-      phone: clinicPhone
-    });
-    setLoadingSettings(false);
-    alert('Configurações da clínica salvas com sucesso! As próximas impressões de receitas e OS exibirão estes dados.');
-  };
-
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow={isAdmin ? 'Administração' : 'Conta'}
         title="Configurações"
         description={isAdmin
-          ? 'Gerencie as preferências da clínica, os acessos da equipe e seu perfil.'
+          ? 'Gerencie unidades, acessos da equipe e seu perfil.'
           : 'Consulte seus dados de acesso e personalize seu perfil.'}
         meta={isAdmin ? 'Acesso administrativo' : 'Preferências pessoais'}
       />
@@ -139,12 +116,12 @@ const SettingsManager = () => {
           <>
             <button
               type="button"
-              aria-pressed={activeSubTab === 'clinic'}
-              className={`btn ${activeSubTab === 'clinic' ? 'btn-primary' : 'btn-secondary'}`}
+              aria-pressed={activeSubTab === 'shops'}
+              className={`btn ${activeSubTab === 'shops' ? 'btn-primary' : 'btn-secondary'}`}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
-              onClick={() => setActiveSubTab('clinic')}
+              onClick={() => setActiveSubTab('shops')}
             >
-              <Building2 size={16} /> Dados do Consultório
+              <Store size={16} /> Unidades / Filiais
             </button>
             <button
               type="button"
@@ -154,15 +131,6 @@ const SettingsManager = () => {
               onClick={() => setActiveSubTab('team')}
             >
               <Users size={16} /> Equipe & Acessos
-            </button>
-            <button
-              type="button"
-              aria-pressed={activeSubTab === 'shops'}
-              className={`btn ${activeSubTab === 'shops' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
-              onClick={() => setActiveSubTab('shops')}
-            >
-              <Store size={16} /> Unidades / Filiais
             </button>
           </>
         )}
@@ -178,76 +146,9 @@ const SettingsManager = () => {
       </div>
 
       <div style={{ padding: '8px 0' }}>
-        {/* ABA 1: DADOS DO CONSULTÓRIO */}
-        {isAdmin && activeSubTab === 'clinic' && (
-          <div style={{ maxWidth: '600px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Building2 size={20} color="var(--primary)" /> Perfil do Consultório / Óptica
-            </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-              Defina os dados de cabeçalho e rodapé que serão exibidos automaticamente nas vias impressas e PDFs de receitas e ordens de serviço.
-            </p>
-
-            <form onSubmit={handleSaveClinicSettings} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="form-group">
-                <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nome do Estabelecimento / Logo Texto*</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  required
-                  value={clinicName}
-                  onChange={(e) => setClinicName(e.target.value)}
-                  placeholder="Ex: Centro Visual Optometria"
-                />
-              </div>
-
-              <div className="form-group">
-                <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Endereço Completo (Rua, Número, Bairro, Cidade)*</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  required
-                  value={clinicAddress}
-                  onChange={(e) => setClinicAddress(e.target.value)}
-                  placeholder="Ex: Av. Quatro, Nº 01, Sl. 02 - Cohab Anil IV - São Luís/MA"
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>CEP*</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    required
-                    value={clinicCep}
-                    onChange={(e) => setClinicCep(e.target.value)}
-                    placeholder="Ex: 65050-700"
-                  />
-                </div>
-                <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>WhatsApp / Telefone de Contato*</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    required
-                    value={clinicPhone}
-                    onChange={(e) => setClinicPhone(e.target.value)}
-                    placeholder="Ex: (98) 98815-4507"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', marginTop: '8px' }}
-                disabled={loadingSettings}
-              >
-                <Save size={18} /> {loadingSettings ? 'Gravando...' : 'Salvar Preferências'}
-              </button>
-            </form>
-          </div>
+        {/* ABA 1: UNIDADES / FILIAIS */}
+        {isAdmin && activeSubTab === 'shops' && (
+          <ShopManager currentUser={currentUser} />
         )}
 
         {/* ABA 2: EQUIPE & ACESSOS */}
@@ -255,12 +156,7 @@ const SettingsManager = () => {
           <TeamAccessManager currentUser={currentUser} />
         )}
 
-        {/* ABA 3: UNIDADES / FILIAIS */}
-        {isAdmin && activeSubTab === 'shops' && (
-          <ShopManager currentUser={currentUser} />
-        )}
-
-        {/* ABA 4: MINHA CONTA */}
+        {/* ABA 3: MINHA CONTA */}
         {activeSubTab === 'account' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '600px' }}>
 
