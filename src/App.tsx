@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useApp } from './context/AppContext';
 import { useAuth } from './context/AuthContext';
 import Login from './components/Login';
@@ -26,8 +26,12 @@ import {
   Settings,
   Sun,
   Moon,
-  Package
+  Package,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
+
+const SIDEBAR_LAYOUT_STORAGE_KEY = 'pia-oftalmo-sidebar-layout';
 
 function App() {
   const { currentUser, logout } = useAuth();
@@ -39,6 +43,24 @@ function App() {
     theme,
     toggleTheme
   } = useApp();
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    try {
+      return window.localStorage.getItem(SIDEBAR_LAYOUT_STORAGE_KEY) === 'expanded';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_LAYOUT_STORAGE_KEY,
+        isSidebarExpanded ? 'expanded' : 'compact'
+      );
+    } catch {
+      // LocalStorage pode estar indisponível em alguns modos privados.
+    }
+  }, [isSidebarExpanded]);
 
   // Filtragem de abas de acordo com a Role do usuário
   const getNavItems = () => {
@@ -132,7 +154,7 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isSidebarExpanded ? 'sidebar-expanded' : 'sidebar-compact'}`}>
       <a className="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
       {/* Mobile Top Header */}
@@ -228,40 +250,44 @@ function App() {
               aria-current={activeTab === item.id ? 'page' : undefined}
               title={item.label}
             >
-              {item.icon}
-              {item.label}
+              <span className="nav-item-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span className="nav-item-label">{item.label}</span>
             </button>
           ))}
         </nav>
 
+        <button
+          type="button"
+          className="sidebar-layout-toggle"
+          onClick={() => setIsSidebarExpanded((isExpanded) => !isExpanded)}
+          aria-pressed={isSidebarExpanded}
+          title={isSidebarExpanded ? 'Usar menu curto' : 'Expandir menu lateral'}
+        >
+          {isSidebarExpanded ? <ChevronsLeft size={18} /> : <ChevronsRight size={18} />}
+          <span>{isSidebarExpanded ? 'Recolher menu' : 'Expandir menu'}</span>
+        </button>
+
         <div className="sidebar-footer">
-          <div className="sidebar-footer-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="sidebar-footer-row">
             <div className="user-profile">
               <div className="user-avatar" style={{ textTransform: 'uppercase' }} aria-hidden="true">
                 {currentUser.name ? currentUser.name[0] : '?'}
               </div>
               <div className="user-info">
-                <div className="user-name" style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="user-name">
                   {currentUser.name}
                 </div>
                 <div className="user-role">{getRoleBadge(currentUser.role)}</div>
               </div>
             </div>
 
-            <div className="sidebar-footer-actions" style={{ display: 'flex', gap: '4px' }}>
+            <div className="sidebar-footer-actions">
               <button
                 type="button"
                 onClick={toggleTheme}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
+                className="sidebar-icon-button"
                 title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
                 aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
               >
@@ -270,16 +296,7 @@ function App() {
               <button
                 type="button"
                 onClick={logout}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
+                className="sidebar-icon-button"
                 title="Sair da Conta"
                 aria-label="Sair da conta"
               >

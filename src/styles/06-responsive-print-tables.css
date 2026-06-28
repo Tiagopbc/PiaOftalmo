@@ -1,0 +1,369 @@
+/* Responsividade móvel inicial, impressão, utilitários e tabelas. */
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agenda-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-list-pane {
+    position: static;
+  }
+
+  .patient-list-scroll {
+    max-height: 430px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-container {
+    flex-direction: column;
+    padding-bottom: 70px; /* Space for bottom nav */
+  }
+
+  .sidebar {
+    display: none; /* Hide desktop sidebar */
+  }
+
+  .main-content {
+    width: 100%;
+    margin-left: 0;
+    padding: 16px;
+    padding-top: 76px; /* Space for top mobile header */
+  }
+
+  .patient-workspace {
+    gap: 16px;
+  }
+
+  .patient-list-card,
+  .patient-detail-card {
+    padding: 18px;
+  }
+
+  .patient-detail-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 11px;
+  }
+
+  .patient-detail-identity h2 {
+    font-size: 20px;
+  }
+
+  .patient-detail-identity p {
+    grid-column: 1 / -1;
+  }
+
+  .patient-info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .patient-info-wide {
+    grid-column: span 2;
+  }
+
+  .patient-detail-card .tab-container {
+    overflow-x: auto;
+  }
+
+  .patient-detail-card .tab-btn {
+    flex: 0 0 auto;
+  }
+
+  /* Bottom navigation for mobile */
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--bg-dark);
+    height: 64px;
+    z-index: 999;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 0 10px;
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 500;
+    flex: 1;
+    gap: 4px;
+    height: 100%;
+    transition: var(--transition-fast);
+  }
+
+  .bottom-nav-item.active {
+    color: var(--text-white);
+  }
+
+  .bottom-nav-item.active svg {
+    color: var(--primary);
+  }
+
+  /* Mobile Top Header */
+  .mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 999;
+  }
+
+  .mobile-header .logo-container {
+    margin-bottom: 0;
+  }
+
+  .mobile-header .logo-text h1 {
+    font-size: 16px;
+    color: var(--text-title);
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .modal-content {
+    width: calc(100% - 32px);
+    padding: 20px;
+    max-height: 85vh;
+  }
+
+  .icon-button,
+  .patient-status-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .calendar-grid {
+    gap: 4px;
+  }
+
+  .calendar-day {
+    min-height: 60px;
+    padding: 2px;
+  }
+
+  .calendar-day-num {
+    font-size: 10px;
+  }
+
+  .calendar-app-pill {
+    font-size: 8px;
+    padding: 1px 2px;
+    margin-top: 2px;
+  }
+}
+
+/* ==========================================================================
+   CSS de Impressao (Receitas e OS)
+   ========================================================================== */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    font-family: 'Inter', sans-serif !important;
+  }
+
+  /* Ocultar elementos de UI interativos, menus e avisos */
+  .sidebar,
+  .bottom-nav,
+  .mobile-header,
+  .pwa-banner,
+  .btn,
+  .tab-container,
+  .form-group,
+  .no-print,
+  .badge-alert,
+  button,
+  select,
+  input,
+  textarea,
+  .main-content {
+    display: none !important;
+  }
+
+  .card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Mostrar elementos específicos para impressao */
+  .print-only {
+    display: block !important;
+  }
+
+  .print-page {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    color: #000000;
+  }
+}
+
+/* Ocultar por padrao no navegador para nao poluir a tela */
+.print-only {
+  display: none;
+}
+
+/* Loading spinner animation for Lazy Loading */
+.loader {
+  border: 3px solid rgba(37, 99, 235, 0.1);
+  border-top-color: var(--primary) !important;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Global Table Styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-card {
+  padding: 0;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  min-width: 880px;
+  text-align: left;
+}
+
+.data-table thead tr {
+  background: var(--bg-primary);
+}
+
+.data-table th {
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.data-table td {
+  padding: 13px 16px;
+  vertical-align: middle;
+}
+
+.data-table tbody tr {
+  transition: background-color var(--transition-fast);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table-link {
+  padding: 0;
+  color: var(--primary);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.table-link:hover {
+  text-decoration: underline;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.table-empty {
+  padding: 48px 24px !important;
+  color: var(--text-muted);
+  text-align: center;
+}
+th {
+  padding: 12px 16px;
+  font-weight: 600;
+  color: var(--text-muted) !important;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 14px;
+}
+tr:hover td {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+[data-theme="light"] tr:hover td {
+  background-color: rgba(0, 0, 0, 0.015);
+}
+
