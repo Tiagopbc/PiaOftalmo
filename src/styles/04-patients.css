@@ -1,0 +1,409 @@
+/* Lista, ficha e detalhes de pacientes. */
+
+.patient-workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 350px) minmax(460px, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.patient-list-pane {
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+}
+
+.patient-list-card,
+.patient-detail-card {
+  margin-bottom: 0;
+}
+
+.patient-list-card {
+  padding: 18px;
+  overflow: hidden;
+}
+
+.patient-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.patient-list-toolbar h2 {
+  margin-top: 1px;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.patient-eyebrow {
+  display: block;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.patient-add-button {
+  flex: 0 0 auto;
+}
+
+.patient-search-box {
+  position: relative;
+}
+
+.patient-search-box .form-control {
+  padding-left: 40px;
+  background: var(--bg-primary);
+}
+
+.patient-search-box > svg {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.patient-status-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px;
+  margin-top: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+}
+
+.patient-status-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 5px;
+  color: var(--text-muted);
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.patient-status-tabs button.active {
+  color: var(--primary);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.patient-status-tabs button span {
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 10px;
+}
+
+.patient-list-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  margin: 7px 2px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.patient-list-summary button {
+  padding: 0;
+  color: var(--primary);
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.patient-list-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 235px);
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.patient-list-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px;
+  color: var(--text-main);
+  text-align: left;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.patient-list-item:hover {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-light) 55%, var(--bg-secondary));
+  transform: translateY(-1px);
+}
+
+.patient-list-item.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: inset 3px 0 0 var(--primary), 0 6px 18px rgba(37, 99, 235, 0.08);
+}
+
+.patient-list-item.inactive {
+  opacity: 0.72;
+  background: var(--bg-primary);
+}
+
+.patient-list-item.inactive.active {
+  opacity: 1;
+  border-color: var(--text-muted);
+  box-shadow: inset 3px 0 0 var(--text-muted);
+}
+
+.patient-list-copy,
+.patient-list-name-row,
+.patient-list-meta,
+.patient-list-last-event {
+  min-width: 0;
+}
+
+.patient-list-copy,
+.patient-list-name-row {
+  display: flex;
+}
+
+.patient-list-copy {
+  flex-direction: column;
+  gap: 3px;
+}
+
+.patient-list-name-row {
+  align-items: center;
+  gap: 6px;
+}
+
+.patient-list-name-row strong,
+.patient-list-last-event {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.patient-list-name-row strong {
+  color: var(--text-title);
+  font-size: 13px;
+}
+
+.patient-minor-badge {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: #0369a1;
+  border-radius: 5px;
+  background: #e0f2fe;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.patient-inactive-badge {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-primary);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.patient-list-meta,
+.patient-list-last-event {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.patient-list-last-event {
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-main));
+}
+
+.patient-list-last-event svg {
+  flex: 0 0 auto;
+}
+
+.patient-list-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  color: var(--status-cancelado-text);
+  border-radius: var(--radius-full);
+  background: var(--status-cancelado);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.patient-detail-pane {
+  min-width: 0;
+}
+
+.patient-detail-card {
+  padding: 26px;
+}
+
+.patient-detail-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding-bottom: 22px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.patient-detail-identity h2 {
+  margin: 2px 0 7px;
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1.15;
+}
+
+.patient-detail-identity p {
+  margin-top: 9px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.patient-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.patient-detail-tags span {
+  padding: 3px 8px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.patient-detail-tags .minor {
+  color: #0369a1;
+  border-color: #bae6fd;
+  background: #e0f2fe;
+}
+
+.patient-detail-tags .inactive {
+  color: var(--status-falta-text);
+  border-color: color-mix(in srgb, var(--status-falta-text) 28%, var(--border-color));
+  background: var(--status-falta);
+}
+
+.patient-status-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 9px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.patient-status-button.deactivate {
+  color: var(--status-falta-text);
+  border: 1px solid color-mix(in srgb, var(--status-falta-text) 24%, var(--border-color));
+  background: var(--status-falta);
+}
+
+.patient-status-button.reactivate {
+  color: var(--status-atendido-text);
+  border: 1px solid color-mix(in srgb, var(--status-atendido-text) 24%, var(--border-color));
+  background: var(--status-atendido);
+}
+
+.patient-status-button:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.15);
+}
+
+.patient-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+  margin-bottom: 22px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--border-color);
+}
+
+.patient-info-item {
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--bg-primary);
+}
+
+.patient-info-item span {
+  display: flex;
+  align-items: center;
+}
+
+.patient-info-item span {
+  gap: 5px;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.patient-info-item strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 650;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-overflow: ellipsis;
+}
+
+.patient-info-wide {
+  grid-column: span 3;
+}
+

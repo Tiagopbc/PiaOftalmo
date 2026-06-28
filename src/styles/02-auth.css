@@ -1,0 +1,212 @@
+/* Login, recuperação e troca forçada de senha. */
+
+.login-password-heading,
+.login-password-heading label,
+.login-recovery-header,
+.login-recovery-header strong {
+  display: flex;
+  align-items: center;
+}
+
+.login-password-heading {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.login-password-heading label,
+.login-recovery-header strong {
+  gap: 6px;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.login-forgot-button {
+  padding: 2px 0;
+  color: var(--primary);
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-forgot-button:hover {
+  text-decoration: underline;
+}
+
+.login-recovery-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin-top: 18px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border-color));
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+}
+
+.login-recovery-header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.login-recovery-header strong,
+.login-recovery-header span {
+  display: block;
+}
+
+.login-recovery-header span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.login-recovery-panel > label {
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.login-recovery-panel > .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.login-recovery-error,
+.login-recovery-success {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.login-recovery-error {
+  color: var(--status-cancelado-text);
+}
+
+.login-recovery-success {
+  color: var(--status-atendido-text);
+}
+
+.login-access-help-text,
+.password-change-account {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.password-recovery-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 20px;
+  background: radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.28), transparent 36%),
+    radial-gradient(circle at 80% 80%, rgba(13, 148, 136, 0.2), transparent 34%),
+    var(--bg-dark);
+}
+
+.password-recovery-card {
+  width: min(100%, 460px);
+  padding: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-xl);
+}
+
+.password-recovery-brand {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 26px;
+  place-items: center;
+  color: #ffffff;
+  border-radius: var(--radius-md);
+  background: linear-gradient(145deg, var(--primary), var(--accent));
+}
+
+.password-recovery-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.password-recovery-heading > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--primary);
+}
+
+.password-recovery-heading h1,
+.password-recovery-complete h1 {
+  margin-bottom: 5px;
+  font-size: 23px;
+}
+
+.password-recovery-heading p,
+.password-recovery-complete p {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.password-recovery-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.password-change-account {
+  padding: 10px 12px;
+  margin: -10px 0 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.password-recovery-form .form-group {
+  margin-bottom: 0;
+}
+
+.password-recovery-form label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--text-main);
+  font-weight: 650;
+}
+
+.password-recovery-form > .btn,
+.password-recovery-complete .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.password-recovery-error {
+  margin: 0;
+  color: var(--status-cancelado-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.password-recovery-complete {
+  text-align: center;
+}
+
+.password-recovery-complete > svg {
+  margin-bottom: 14px;
+  color: var(--status-atendido-text);
+}
+
+.password-recovery-complete p {
+  margin-bottom: 22px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-title);
+  color: var(--text-title);
+  font-weight: 600;
+}
+
