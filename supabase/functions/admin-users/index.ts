@@ -1,4 +1,4 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 
 const ALLOWED_ROLES = new Set(['admin', 'recepcao', 'medico', 'vendedor']);
 const LONG_BAN_DURATION = '876000h';
@@ -69,6 +69,19 @@ type AccessDirectory = {
   access: Map<string, AccessRecord>;
 };
 
+type DenoRuntime = {
+  env: {
+    get: (key: string) => string | undefined;
+  };
+  serve: (handler: (request: Request) => Response | Promise<Response>) => void;
+};
+
+const denoRuntime = (globalThis as typeof globalThis & { Deno?: DenoRuntime }).Deno;
+
+if (!denoRuntime) {
+  throw new Error('A função admin-users deve ser executada no runtime Deno.');
+}
+
 const isStrongPassword = (password: string) =>
     password.length >= 8 &&
     /[A-Z]/.test(password) &&
@@ -84,6 +97,11 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const jsonError = (message: string, status: number) =>
     jsonResponse({ error: message }, status);
+
+const internalAdminError = (detail: string) => {
+  console.error('admin-users:', detail);
+  return jsonError('Não foi possível concluir a operação administrativa.', 500);
+};
 
 const isUserActive = (user: {
   banned_until?: string | null;
@@ -292,7 +310,7 @@ const canReduceAdminCoverage = async (admin: AdminApi, client: any) => {
   return activeAdmins.length > MINIMUM_ACTIVE_ADMINS;
 };
 
-Deno.serve(async (request: Request) => {
+denoRuntime.serve(async (request: Request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', {
       headers: corsHeaders
@@ -300,9 +318,9 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabaseUrl = denoRuntime.env.get('SUPABASE_URL') || '';
+    const supabaseAnonKey = denoRuntime.env.get('SUPABASE_ANON_KEY') || '';
+    const supabaseServiceRoleKey = denoRuntime.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
     if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
       return jsonError('Variáveis de ambiente do Supabase não configuradas.', 500);
@@ -369,7 +387,7 @@ Deno.serve(async (request: Request) => {
       });
 
       if (error || !data.user) {
-        throw new Error(error?.message || 'Falha ao liberar a nova senha.');
+        return internalAdminError(error?.message || 'Falha ao liberar a nova senha.');
       }
 
       return jsonResponse({
@@ -392,7 +410,7 @@ Deno.serve(async (request: Request) => {
       });
 
       if (error) {
-        throw new Error(error.message);
+        return internalAdminError(error.message);
       }
 
       const directory = await fetchAccessDirectory(adminClient, data.users);
@@ -441,7 +459,7 @@ Deno.serve(async (request: Request) => {
       });
 
       if (error || !data.user) {
-        throw new Error(error?.message || 'Falha ao criar usuário.');
+        return internalAdminError(error?.message || 'Falha ao criar usuário.');
       }
 
       await syncProfileAndAccess(adminClient, data.user, {
@@ -510,7 +528,7 @@ Deno.serve(async (request: Request) => {
       });
 
       if (error || !data.user) {
-        throw new Error(error?.message || 'Falha ao atualizar usuário.');
+        return internalAdminError(error?.message || 'Falha ao atualizar usuário.');
       }
 
       await syncProfileAndAccess(adminClient, data.user, {
@@ -567,7 +585,7 @@ Deno.serve(async (request: Request) => {
       });
 
       if (error || !data.user) {
-        throw new Error(error?.message || 'Falha ao alterar acesso.');
+        return internalAdminError(error?.message || 'Falha ao alterar acesso.');
       }
 
       const updatedProfile = await getRequesterProfile(adminClient, userId);
@@ -622,7 +640,7 @@ Deno.serve(async (request: Request) => {
       });
 
       if (error || !data.user) {
-        throw new Error(error?.message || 'Falha ao redefinir a senha.');
+        return internalAdminError(error?.message || 'Falha ao redefinir a senha.');
       }
 
       return jsonResponse({
