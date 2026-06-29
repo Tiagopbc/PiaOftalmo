@@ -4,6 +4,35 @@ import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { getAuthUserProfile } from '../utils/authUser';
 import { Glasses, Lock, Mail, AlertCircle, KeyRound, X } from 'lucide-react';
 
+const getFriendlyLoginError = (err: unknown) => {
+  const rawMessage = err instanceof Error ? err.message : 'Erro ao realizar login.';
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (rawMessage === '{}' || typeof rawMessage !== 'string') {
+    return 'Erro de conexão ou serviço indisponível. Verifique sua internet ou bloqueadores de anúncios.';
+  }
+
+  if (normalizedMessage.includes('user is banned')) {
+    return 'Usuário inativo. Procure o administrador para reativar o acesso.';
+  }
+
+  if (
+      normalizedMessage.includes('invalid login credentials') ||
+      normalizedMessage.includes('invalid credentials')
+  ) {
+    return 'E-mail ou senha incorretos. Confira os dados e tente novamente.';
+  }
+
+  if (
+      normalizedMessage.includes('rate limit') ||
+      normalizedMessage.includes('too many requests')
+  ) {
+    return 'Muitas tentativas em pouco tempo. Aguarde alguns minutos antes de tentar novamente.';
+  }
+
+  return rawMessage || 'Erro ao realizar login.';
+};
+
 const Login = () => {
   const { setCurrentUser } = useAuth();
   const [email, setEmail] = useState('');
@@ -33,11 +62,7 @@ const Login = () => {
       const profile = await getAuthUserProfile(data.user);
       setCurrentUser(profile);
     } catch (err) {
-      let errorMessage = err instanceof Error ? err.message : 'Erro ao realizar login.';
-      if (errorMessage === '{}' || typeof errorMessage !== 'string') {
-        errorMessage = 'Erro de conexão ou serviço indisponível. Verifique sua internet ou bloqueadores de anúncios.';
-      }
-      setError(errorMessage);
+      setError(getFriendlyLoginError(err));
     } finally {
       setLoading(false);
     }
