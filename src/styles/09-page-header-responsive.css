@@ -313,6 +313,7 @@
   }
 
   .app-container.sidebar-expanded .sidebar-footer-row {
+    width: 100%;
     align-items: stretch !important;
     flex-direction: column;
     justify-content: flex-start !important;
@@ -321,14 +322,22 @@
 
   .app-container.sidebar-expanded .sidebar-footer-actions {
     display: flex;
+    align-items: center !important;
+    flex-direction: row;
+    justify-content: flex-start !important;
     gap: 10px;
-    width: auto;
+    width: 100%;
   }
 
   .app-container.sidebar-expanded .user-profile {
     gap: 12px;
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .app-container.sidebar-expanded .user-info {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .app-container.sidebar-expanded .user-avatar {
