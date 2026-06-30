@@ -192,11 +192,27 @@
    CSS de Impressao (Receitas e OS)
    ========================================================================== */
 @media print {
+  @page {
+    size: A4;
+    margin: 7mm;
+  }
+
   body, html {
     background: #ffffff !important;
     color: #000000 !important;
     font-size: 11pt !important;
     font-family: 'Inter', sans-serif !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  #root,
+  .app-container {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
 
   /* Ocultar elementos de UI interativos, menus e avisos */
@@ -230,12 +246,168 @@
     display: block !important;
   }
 
+  .skip-link {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
   .print-page {
     width: 100%;
     max-width: 800px;
     margin: 0 auto;
     padding: 20px;
     color: #000000;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .rx-print-page {
+    width: 176mm !important;
+    max-width: 176mm !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    font-size: 8.5pt !important;
+    line-height: 1.15 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: visible !important;
+  }
+
+  .rx-print-page * {
+    box-sizing: border-box;
+  }
+
+  .rx-print-header {
+    padding-bottom: 5px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .rx-print-header h2 {
+    font-size: 17px !important;
+    line-height: 1.05 !important;
+    margin-bottom: 1px !important;
+  }
+
+  .rx-print-header p {
+    font-size: 7.5px !important;
+    letter-spacing: 1px !important;
+  }
+
+  .rx-print-meta {
+    width: 92% !important;
+    margin: 0 auto 8px !important;
+    padding: 6px 8px !important;
+    gap: 8px !important;
+    font-size: 8.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  .rx-print-meta p {
+    margin-bottom: 2px !important;
+  }
+
+  .rx-print-title {
+    width: 92% !important;
+    margin: 0 auto 5px !important;
+    padding-bottom: 3px !important;
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .rx-print-section {
+    width: 92% !important;
+    margin: 0 auto 6px !important;
+  }
+
+  .rx-print-section > div {
+    font-size: 8.5px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .rx-print-table {
+    width: 88% !important;
+    margin: 0 auto !important;
+    table-layout: fixed !important;
+    font-size: 8.5px !important;
+    line-height: 1.05 !important;
+  }
+
+  .rx-print-table th,
+  .rx-print-table td {
+    padding: 2px 3px !important;
+    height: 15px !important;
+    line-height: 1.05 !important;
+    vertical-align: middle !important;
+  }
+
+  .rx-print-addition {
+    width: 92% !important;
+    margin: 0 auto 6px !important;
+    font-size: 8.5px !important;
+  }
+
+  .rx-print-addition span {
+    min-width: 95px !important;
+    padding: 4px 6px !important;
+  }
+
+  .rx-print-filters {
+    width: 92% !important;
+    margin: 0 auto 6px !important;
+    padding: 5px 7px !important;
+    font-size: 8.5px !important;
+  }
+
+  .rx-print-filters div {
+    gap: 10px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .rx-print-filters span {
+    gap: 3px !important;
+  }
+
+  .rx-print-filters span span {
+    font-size: 10px !important;
+  }
+
+  .rx-print-note {
+    width: 92% !important;
+    margin: 0 auto 3px !important;
+    font-size: 8.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  .rx-print-signature {
+    width: 92% !important;
+    margin: 10px auto 0 !important;
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+  }
+
+  .rx-print-signature > div:first-child {
+    max-width: 245px !important;
+    font-size: 7.5px !important;
+    line-height: 1.15 !important;
+  }
+
+  .rx-print-signature > div:last-child {
+    width: 185px !important;
+  }
+
+  .rx-print-signature > div:last-child > div {
+    min-height: 22px !important;
+  }
+
+  .rx-print-signature hr {
+    width: 165px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .rx-print-signature p {
+    font-size: 8px !important;
+    line-height: 1.15 !important;
   }
 }
 
@@ -366,4 +538,3 @@ tr:hover td {
 [data-theme="light"] tr:hover td {
   background-color: rgba(0, 0, 0, 0.015);
 }
-

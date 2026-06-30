@@ -22,7 +22,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!currentUser) return;
     setLoading(true);
     try {
-      const data = await patientService.getAll();
+      const data = await patientService.getVisibleForCurrentUser();
       setPatients(data);
     } catch (e) {
       console.error('Erro ao carregar pacientes', e);

@@ -6,6 +6,7 @@ import { ForcedPasswordChange } from './components/ForcedPasswordChange';
 import { StatePanel } from './components/StatePanel';
 import { formatLabName } from './utils/helpers';
 import { getShopDisplayName } from './utils/shops';
+import { isDoctorRole } from './utils/roles';
 
 // Lazy loading component tabs for bundle optimization
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -32,6 +33,23 @@ import {
 } from 'lucide-react';
 
 const SIDEBAR_LAYOUT_STORAGE_KEY = 'pia-oftalmo-sidebar-layout';
+
+const formatPrintDateTime = (value?: string | null) => {
+  if (!value) return new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T12:00:00`)
+    : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return parsed.toLocaleDateString('pt-BR');
+  }
+
+  return parsed.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+};
 
 function App() {
   const { currentUser, logout } = useAuth();
@@ -66,19 +84,20 @@ function App() {
   const getNavItems = () => {
     const role = currentUser?.role;
     if (!role) return [];
+    const isDoctor = isDoctorRole(currentUser?.appRole) || isDoctorRole(role);
 
     const items = [
       { id: 'dashboard', label: 'Painel Geral', icon: <LayoutDashboard size={20} /> }
     ];
 
-    if (role === 'admin' || role === 'recepcao' || role === 'medico') {
+    if (role === 'admin' || role === 'recepcao' || isDoctor) {
       items.push({ id: 'patients', label: 'Pacientes', icon: <Users size={20} /> });
     } else if (role === 'vendedor') {
       // Vendedores precisam acessar a lista de pacientes para ver receitas e OS
       items.push({ id: 'patients', label: 'Receitas / Fichas', icon: <Users size={20} /> });
     }
 
-    if (role === 'admin' || role === 'recepcao' || role === 'medico') {
+    if (role === 'admin' || role === 'recepcao' || isDoctor) {
       items.push({ id: 'agenda', label: 'Agenda & Consultas', icon: <CalendarDays size={20} /> });
     }
 
@@ -144,9 +163,10 @@ function App() {
   );
 
   const getRoleBadge = (role: string) => {
+    if (isDoctorRole(role)) return 'Especialista';
+
     switch (role) {
       case 'admin': return 'Administrador';
-      case 'medico': return 'Especialista';
       case 'recepcao': return 'Recepção';
       case 'vendedor': return 'Óptica / OS';
       default: return role;
@@ -345,10 +365,11 @@ function App() {
         const longeOE = rx.longe?.oe || rx.oe || {};
         const pertoOD = rx.perto?.od || null;
         const pertoOE = rx.perto?.oe || null;
-        const adicao = rx.adicao || rx.od?.adicao || rx.oe?.adicao || '';
-        const lensTypes = rx.lensTypes || {};
+        const adicao = rx.adicao || rx.addition || rx.od?.adicao || rx.oe?.adicao || '';
+        const lensTypes = rx.lensTypes || rx.lens_types || {};
         const notes = rx.notes || '';
-        const lensType = rx.lensType || '';
+        const lensType = rx.lensType || rx.lens_type || '';
+        const doctorName = rx.doctor || rx.doctor_name || 'Profissional não informado';
 
         // Calculate age
         const calculateAge = (birthDateString?: string) => {
@@ -365,155 +386,155 @@ function App() {
         const patientAge = calculateAge(activePrintData.patientBirthDate);
 
         return (
-          <div className="print-only print-page" style={{ padding: '40px', color: '#000', fontFamily: 'sans-serif' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '2px solid #000', paddingBottom: '16px', marginBottom: '24px' }}>
+          <div className="print-only print-page rx-print-page" style={{ padding: '18px 22px', color: '#000', fontFamily: 'sans-serif' }}>
+            <div className="rx-print-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '12px' }}>
               <div style={{ textAlign: 'center' }}>
-                <h2 style={{ fontSize: '26px', fontWeight: 'bold', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                <h2 style={{ fontSize: '21px', fontWeight: 'bold', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                   {clinicSettings?.name || 'Centro Visual'}
                 </h2>
-                <p style={{ fontSize: '11px', fontWeight: 'bold', letterSpacing: '2px', textTransform: 'uppercase', color: '#555', margin: 0 }}>
+                <p style={{ fontSize: '9px', fontWeight: 'bold', letterSpacing: '1.5px', textTransform: 'uppercase', color: '#555', margin: 0 }}>
                   Optometria & Saúde Visual
                 </p>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', border: '1px solid #000', padding: '16px', borderRadius: '4px', marginBottom: '24px', fontSize: '13px', lineHeight: '1.6' }}>
+            <div className="rx-print-meta" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px', border: '1px solid #000', padding: '10px', borderRadius: '4px', marginBottom: '12px', fontSize: '11px', lineHeight: '1.35' }}>
               <div>
-                <p style={{ margin: '0 0 6px' }}><strong>Paciente:</strong> {activePrintData.patientName}</p>
-                <p style={{ margin: '0 0 6px' }}><strong>Data de Nascimento:</strong> {activePrintData.patientBirthDate ? new Date(activePrintData.patientBirthDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} {patientAge && `(${patientAge})`}</p>
+                <p style={{ margin: '0 0 4px' }}><strong>Paciente:</strong> {activePrintData.patientName}</p>
+                <p style={{ margin: '0 0 4px' }}><strong>Data de Nascimento:</strong> {activePrintData.patientBirthDate ? new Date(activePrintData.patientBirthDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} {patientAge && `(${patientAge})`}</p>
                 <p style={{ margin: 0 }}><strong>Sexo:</strong> {activePrintData.patientGender || '-'}</p>
               </div>
               <div>
-                <p style={{ margin: '0 0 6px' }}><strong>Emissor:</strong> {rx.doctor}</p>
-                <p style={{ margin: '0 0 6px' }}><strong>Data:</strong> {rx.date ? new Date(rx.date + 'T00:00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}</p>
+                <p style={{ margin: '0 0 4px' }}><strong>Emissor:</strong> {doctorName}</p>
+                <p style={{ margin: '0 0 4px' }}><strong>Emitida em:</strong> {formatPrintDateTime(rx.createdAt || rx.created_at || rx.date)}</p>
                 {activePrintData.patientPhone && <p style={{ margin: 0 }}><strong>Contato:</strong> {activePrintData.patientPhone}</p>}
               </div>
             </div>
 
-            <h3 style={{ fontSize: '15px', borderBottom: '1px solid #000', paddingBottom: '6px', marginBottom: '14px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+            <h3 className="rx-print-title" style={{ fontSize: '13px', borderBottom: '1px solid #000', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase', fontWeight: 'bold' }}>
               Receita de Óculos (Prescrição)
             </h3>
 
             {/* LONGE TABLE */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', textTransform: 'uppercase' }}>Longe</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', border: '1px solid #000', fontSize: '13px' }}>
+            <div className="rx-print-section" style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Longe</div>
+              <table className="rx-print-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', border: '1px solid #000', fontSize: '11px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f2f2f2', borderBottom: '1px solid #000' }}>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '10%' }}>Olho</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '22.5%' }}>Esférico</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '22.5%' }}>Cilíndrico</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '15%' }}>Eixo</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '15%' }}>DNP</th>
-                    <th style={{ padding: '8px', width: '15%' }}>AV</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '10%' }}>Olho</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '22.5%' }}>Esférico</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '22.5%' }}>Cilíndrico</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '15%' }}>Eixo</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '15%' }}>DNP</th>
+                    <th style={{ padding: '5px', width: '15%' }}>AV</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OD</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOD.esferico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOD.cilindrico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOD.eixo ? `${longeOD.eixo}°` : '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOD.dnp ? `${longeOD.dnp} mm` : '—'}</td>
-                    <td style={{ padding: '8px' }}>{longeOD.av || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OD</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOD.esferico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOD.cilindrico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOD.eixo ? `${longeOD.eixo}°` : '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOD.dnp ? `${longeOD.dnp} mm` : '—'}</td>
+                    <td style={{ padding: '5px' }}>{longeOD.av || '—'}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OE</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOE.esferico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOE.cilindrico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOE.eixo ? `${longeOE.eixo}°` : '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{longeOE.dnp ? `${longeOE.dnp} mm` : '—'}</td>
-                    <td style={{ padding: '8px' }}>{longeOE.av || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OE</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOE.esferico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOE.cilindrico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOE.eixo ? `${longeOE.eixo}°` : '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{longeOE.dnp ? `${longeOE.dnp} mm` : '—'}</td>
+                    <td style={{ padding: '5px' }}>{longeOE.av || '—'}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* PERTO TABLE */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '6px', textTransform: 'uppercase' }}>Perto</div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', border: '1px solid #000', fontSize: '13px' }}>
+            <div className="rx-print-section" style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Perto</div>
+              <table className="rx-print-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', border: '1px solid #000', fontSize: '11px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f2f2f2', borderBottom: '1px solid #000' }}>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '10%' }}>Olho</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '22.5%' }}>Esférico</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '22.5%' }}>Cilíndrico</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '15%' }}>Eixo</th>
-                    <th style={{ padding: '8px', borderRight: '1px solid #000', width: '15%' }}>DNP</th>
-                    <th style={{ padding: '8px', width: '15%' }}>AV</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '10%' }}>Olho</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '22.5%' }}>Esférico</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '22.5%' }}>Cilíndrico</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '15%' }}>Eixo</th>
+                    <th style={{ padding: '5px', borderRight: '1px solid #000', width: '15%' }}>DNP</th>
+                    <th style={{ padding: '5px', width: '15%' }}>AV</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr style={{ borderBottom: '1px solid #000' }}>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OD</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOD?.esferico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOD?.cilindrico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOD?.eixo ? `${pertoOD.eixo}°` : '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOD?.dnp ? `${pertoOD.dnp} mm` : '—'}</td>
-                    <td style={{ padding: '8px' }}>{pertoOD?.av || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OD</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOD?.esferico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOD?.cilindrico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOD?.eixo ? `${pertoOD.eixo}°` : '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOD?.dnp ? `${pertoOD.dnp} mm` : '—'}</td>
+                    <td style={{ padding: '5px' }}>{pertoOD?.av || '—'}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OE</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOE?.esferico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOE?.cilindrico || '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOE?.eixo ? `${pertoOE.eixo}°` : '—'}</td>
-                    <td style={{ padding: '8px', borderRight: '1px solid #000' }}>{pertoOE?.dnp ? `${pertoOE.dnp} mm` : '—'}</td>
-                    <td style={{ padding: '8px' }}>{pertoOE?.av || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000', fontWeight: 'bold' }}>OE</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOE?.esferico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOE?.cilindrico || '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOE?.eixo ? `${pertoOE.eixo}°` : '—'}</td>
+                    <td style={{ padding: '5px', borderRight: '1px solid #000' }}>{pertoOE?.dnp ? `${pertoOE.dnp} mm` : '—'}</td>
+                    <td style={{ padding: '5px' }}>{pertoOE?.av || '—'}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             {/* ADIÇÃO */}
-            <div style={{ marginBottom: '20px', fontSize: '13px' }}>
-              <span style={{ padding: '8px', border: '1px solid #000', display: 'inline-block', minWidth: '150px', backgroundColor: '#fafafa' }}>
+            <div className="rx-print-addition" style={{ marginBottom: '10px', fontSize: '11px' }}>
+              <span style={{ padding: '6px 8px', border: '1px solid #000', display: 'inline-block', minWidth: '130px', backgroundColor: '#fafafa' }}>
                 <strong>ADIÇÃO:</strong> {adicao ? `${adicao.startsWith('+') || adicao.startsWith('-') ? '' : '+'}${adicao}` : '—'}
               </span>
             </div>
 
             {/* TIPO DE LENTE (Checkboxes) */}
-            <div style={{ marginBottom: '20px', fontSize: '13px', border: '1px solid #000', padding: '12px', borderRadius: '4px' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Tipo de Lente / Filtros:</div>
-              <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+            <div className="rx-print-filters" style={{ marginBottom: '10px', fontSize: '11px', border: '1px solid #000', padding: '8px', borderRadius: '4px' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '6px' }}>Tipo de Lente / Filtros:</div>
+              <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '16px' }}>{lensTypes.antireflexo ? '☑' : '☐'}</span> Antirreflexo
+                  <span style={{ fontSize: '13px' }}>{lensTypes.antireflexo ? '☑' : '☐'}</span> Antirreflexo
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '16px' }}>{lensTypes.multifocal ? '☑' : '☐'}</span> Multifocal
+                  <span style={{ fontSize: '13px' }}>{lensTypes.multifocal ? '☑' : '☐'}</span> Multifocal
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '16px' }}>{lensTypes.fotossensivel ? '☑' : '☐'}</span> Fotossensível
+                  <span style={{ fontSize: '13px' }}>{lensTypes.fotossensivel ? '☑' : '☐'}</span> Fotossensível
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '16px' }}>{lensTypes.bluecontrol ? '☑' : '☐'}</span> Bluecontrol
+                  <span style={{ fontSize: '13px' }}>{lensTypes.bluecontrol ? '☑' : '☐'}</span> Bluecontrol
                 </span>
               </div>
             </div>
 
             {/* LENS SUGGESTION & NOTES */}
             {lensType && (
-              <p style={{ fontSize: '13px', margin: '0 0 8px' }}>
+              <p className="rx-print-note" style={{ fontSize: '11px', margin: '0 0 5px' }}>
                 <strong>Sugestão de Lentes:</strong> {lensType}
               </p>
             )}
             {notes && (
-              <p style={{ fontSize: '13px', fontStyle: 'italic', margin: '0 0 24px', color: '#333' }}>
+              <p className="rx-print-note" style={{ fontSize: '11px', fontStyle: 'italic', margin: '0 0 10px', color: '#333' }}>
                 <strong>Obs.:</strong> "{notes}"
               </p>
             )}
 
             {/* SIGNATURE / STAMP */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '60px' }}>
-              <div style={{ fontSize: '10px', color: '#555', maxWidth: '300px', lineHeight: '1.4' }}>
-                <p style={{ margin: '0 0 4px' }}><strong>{clinicSettings?.name || 'Centro Visual Optometria'}</strong></p>
+            <div className="rx-print-signature" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '18px' }}>
+              <div style={{ fontSize: '9px', color: '#555', maxWidth: '300px', lineHeight: '1.25' }}>
+                <p style={{ margin: '0 0 2px' }}><strong>{clinicSettings?.name || 'Centro Visual Optometria'}</strong></p>
                 <p style={{ margin: 0 }}>{clinicSettings?.address || 'Av. Quatro, Nº 01, Sl. 02 - Cohab Anil IV - São Luís/MA'}</p>
                 <p style={{ margin: 0 }}>CEP: {clinicSettings?.cep || '65050-700'} | Contato: {clinicSettings?.phone || '(98) 98815-4507'}</p>
               </div>
-              <div style={{ textAlign: 'center', width: '250px' }}>
-                <div style={{ minHeight: '60px' }}></div>
-                <hr style={{ width: '220px', margin: '0 auto 6px', borderColor: '#000' }} />
-                <p style={{ fontSize: '13px', fontWeight: 'bold', margin: 0 }}>Dr(a). {rx.doctor}</p>
-                <p style={{ fontSize: '10px', color: '#555', margin: 0 }}>Optometrista / Oftalmologista</p>
+              <div style={{ textAlign: 'center', width: '230px' }}>
+                <div style={{ minHeight: '34px' }}></div>
+                <hr style={{ width: '200px', margin: '0 auto 4px', borderColor: '#000' }} />
+                <p style={{ fontSize: '11px', fontWeight: 'bold', margin: 0 }}>Dr(a). {doctorName}</p>
+                <p style={{ fontSize: '9px', color: '#555', margin: 0 }}>Optometrista / Oftalmologista</p>
               </div>
             </div>
           </div>

@@ -54,7 +54,7 @@ const FinanceManager = () => {
   };
 
   const [activeSubTab, setActiveSubTab] = useState('receivables'); // receivables, commissions, stats
-  const [selectedProfId, setSelectedProfId] = useState(professionals[0]?.id || '1');
+  const [selectedProfId, setSelectedProfId] = useState('');
   const [selectedShopFilter, setSelectedShopFilter] = useState(() => {
     return currentUser?.shopId || 'all';
   });
@@ -62,6 +62,19 @@ const FinanceManager = () => {
   // Preço padrão para consultas particulares (para fins de simulação financeira)
   const PRIVATE_CONSULTATION_PRICE = 350.00;
   const INSURANCE_CONSULTATION_FEE = 120.00;
+
+  useEffect(() => {
+    const firstProfessionalId = professionals[0]?.id || '';
+
+    if (!firstProfessionalId) {
+      setSelectedProfId('');
+      return;
+    }
+
+    if (!selectedProfId || !professionals.some((professional) => professional.id === selectedProfId)) {
+      setSelectedProfId(firstProfessionalId);
+    }
+  }, [professionals, selectedProfId]);
 
   const allPurchases: PurchaseRow[] = sales.map(s => ({
     ...s,
@@ -322,6 +335,9 @@ const FinanceManager = () => {
                     value={selectedProfId}
                     onChange={(e) => setSelectedProfId(e.target.value)}
                   >
+                    {professionals.length === 0 && (
+                      <option value="">Nenhum especialista ativo</option>
+                    )}
                     {professionals.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -333,10 +349,10 @@ const FinanceManager = () => {
                 <div style={{ backgroundColor: 'var(--bg-primary)', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', height: 'fit-content' }}>
                   <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                     <div style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-full)', background: 'linear-gradient(135deg, var(--primary), var(--accent))', color: '#fff', fontSize: '24px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                      {selectedProf?.name.split(' ').slice(-1)[0][0]}
+                      {selectedProf?.name.split(' ').slice(-1)[0]?.[0] || '—'}
                     </div>
-                    <h5 style={{ fontSize: '16px', margin: 0 }}>{selectedProf?.name}</h5>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{selectedProf?.specialty}</span>
+                    <h5 style={{ fontSize: '16px', margin: 0 }}>{selectedProf?.name || 'Nenhum especialista selecionado'}</h5>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{selectedProf?.specialty || 'Cadastre um especialista ativo em Equipe & Acessos'}</span>
                   </div>
 
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>

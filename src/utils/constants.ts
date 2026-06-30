@@ -13,12 +13,6 @@ export const PAYMENT_TYPES = [
   { id: 'cortesia', name: 'Cortesia' }
 ];
 
-export const PROFESSIONALS = [
-  { id: '1', name: 'Dr. Roberto Mendes', specialty: 'Oftalmologista Geral', color: '#3b82f6' },
-  { id: '2', name: 'Dra. Sandra Regina', specialty: 'Contatóloga / Lentes de Contato', color: '#10b981' },
-  { id: '3', name: 'Dr. Lucas Viana', specialty: 'Especialista em Retinografia', color: '#f59e0b' }
-];
-
 export const ROOMS = [
   { id: 'sala-1', name: 'Consultório 1 - Refração' },
   { id: 'sala-2', name: 'Consultório 2 - Lentes' },

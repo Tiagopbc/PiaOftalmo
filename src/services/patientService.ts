@@ -31,6 +31,12 @@ export const patientService = {
     if (error) throw error;
     return (data || []).map(mapPatientToCamel) as Patient[];
   },
+  async getVisibleForCurrentUser(): Promise<Patient[]> {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.rpc('list_visible_patients_for_current_user');
+    if (error) throw error;
+    return (data || []).map(mapPatientToCamel) as Patient[];
+  },
   async create(patient: Partial<Patient>): Promise<Patient> {
     if (!isSupabaseConfigured) throw new Error('Supabase não configurado.');
     const patientToInsert = {

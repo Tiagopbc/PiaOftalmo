@@ -4,6 +4,7 @@ import { patientService } from '../services/patientService';
 import { appointmentService } from '../services/appointmentService';
 import { useAuth } from './AuthContext';
 import { usePatients } from './PatientContext';
+import { isDoctorUser } from '../utils/roles';
 
 interface AppointmentContextType {
   appointments: Appointment[];
@@ -24,7 +25,9 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!currentUser) return;
     setLoading(true);
     try {
-      const data = await appointmentService.getAll();
+      const data = isDoctorUser(currentUser)
+        ? await appointmentService.getByProfessional(currentUser.id)
+        : await appointmentService.getAll();
       setAppointments(data);
     } catch (e) {
       console.error('Erro ao carregar agendamentos', e);
@@ -46,7 +49,7 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const newApp: Partial<Appointment> = {
       ...app,
       status: 'confirmado',
-      shop_id: currentUser?.shopId
+      shop_id: patient?.shop_id || (currentUser?.shopId === 'all' ? undefined : currentUser?.shopId)
     };
 
     try {
@@ -57,7 +60,7 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const serviceName = app.serviceId || 'Consulta / Exame';
         await patientService.addTimelineEvent({
           patientId: patient.id,
-          date: app.date,
+          date: new Date().toISOString(),
           type: 'appointment',
           title: 'Agendamento Criado',
           description: `${serviceName} agendado para o dia ${app.date} às ${app.time}hs.`,
@@ -85,6 +88,9 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
           if (status === 'cancelado') {
             title = 'Agendamento Cancelado';
             desc = `Cancelado por motivo: ${cancelReason || 'Não informado'}.`;
+          } else if (status === 'em_atendimento') {
+            title = 'Atendimento Iniciado';
+            desc = `Atendimento clínico iniciado pelo profissional.`;
           } else if (status === 'atendido') {
             title = 'Atendimento Realizado';
             desc = `Paciente atendido e finalizado pelo profissional.`;
@@ -95,7 +101,7 @@ export const AppointmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
           await patientService.addTimelineEvent({
             patientId: patient.id,
-            date: new Date().toISOString().split('T')[0],
+            date: new Date().toISOString(),
             type: 'appointment',
             title,
             description: desc,

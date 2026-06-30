@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ChangeEvent, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ChangeEvent, type FormEvent } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../context/PatientContext';
@@ -9,6 +9,15 @@ import { saleService } from '../services/saleService';
 import { attachmentService } from '../services/attachmentService';
 import { shopService, type Shop } from '../services/shopService';
 import { getShopDisplayName } from '../utils/shops';
+import {
+  canCreatePatients,
+  canEditPatientAdministrativeFields,
+  canManageAdministrativeAlerts,
+  canManagePatientStatus,
+  canViewPatientOsTab,
+  isDoctorUser
+} from '../utils/roles';
+import type { Professional } from '../services/professionalService';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
@@ -29,9 +38,10 @@ import {
   FlaskConical,
   Download,
   Lock,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-react';
-import type { Patient, PatientAttachment } from '../types';
+import type { Patient, PatientAttachment, Prescription } from '../types';
 
 type LegacyRecord = Record<string, any>;
 type PatientWithLegacyData = Patient & {
@@ -59,6 +69,73 @@ const formatBrazilPhone = (value?: string | null) => {
   }
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 };
+
+const emptyRefractionEye = () => ({ esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' });
+
+const createEmptyRxForm = (professional?: { id?: string; name?: string } | null) => ({
+  professionalId: professional?.id || '',
+  doctor: professional?.name || '',
+  longe: {
+    od: emptyRefractionEye(),
+    oe: emptyRefractionEye()
+  },
+  perto: {
+    od: emptyRefractionEye(),
+    oe: emptyRefractionEye()
+  },
+  adicao: '',
+  lensTypes: {
+    antireflexo: false,
+    multifocal: false,
+    fotossensivel: false,
+    bluecontrol: false
+  },
+  lensType: '',
+  notes: ''
+});
+
+const createRxFormFromPrescription = (
+  rx: LegacyRecord,
+  fallbackProfessional?: { id?: string; name?: string } | null
+) => ({
+  ...createEmptyRxForm(fallbackProfessional),
+  professionalId: rx.professionalId || rx.professional_id || fallbackProfessional?.id || '',
+  doctor: rx.doctor || fallbackProfessional?.name || '',
+  longe: {
+    od: { ...emptyRefractionEye(), ...(rx.longe?.od || rx.od || {}) },
+    oe: { ...emptyRefractionEye(), ...(rx.longe?.oe || rx.oe || {}) }
+  },
+  perto: {
+    od: { ...emptyRefractionEye(), ...(rx.perto?.od || {}) },
+    oe: { ...emptyRefractionEye(), ...(rx.perto?.oe || {}) }
+  },
+  adicao: rx.adicao || rx.addition || rx.od?.adicao || rx.oe?.adicao || '',
+  lensTypes: {
+    ...createEmptyRxForm().lensTypes,
+    ...(rx.lensTypes || rx.lens_types || {})
+  },
+  lensType: rx.lensType || rx.lens_type || '',
+  notes: rx.notes || ''
+});
+
+const createPatientEditForm = (patient?: PatientWithLegacyData | null) => ({
+  name: patient?.name || '',
+  cpf: patient?.cpf || '',
+  rg: patient?.rg || '',
+  birthDate: patient?.birthDate || '',
+  gender: patient?.gender || 'Masculino',
+  phone: patient?.phone || '',
+  whatsapp: patient?.whatsapp || '',
+  email: patient?.email || '',
+  address: patient?.address || '',
+  isMinor: Boolean(patient?.isMinor),
+  guardian: {
+    name: patient?.guardian?.name || '',
+    cpf: patient?.guardian?.cpf || '',
+    phone: patient?.guardian?.phone || ''
+  },
+  notes: patient?.notes || ''
+});
 
 const getErrorMessage = (error: unknown) => {
   const fallback = 'Erro inesperado.';
@@ -118,9 +195,100 @@ const getLastPatientEvent = (patient?: PatientWithLegacyData | null) => {
 
 const formatPatientDate = (date?: string) => {
   if (!date) return 'Data não informada';
-  const parsed = new Date(`${date}T12:00:00`);
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? new Date(`${date}T12:00:00`)
+    : new Date(date);
   return Number.isNaN(parsed.getTime()) ? 'Data não informada' : parsed.toLocaleDateString('pt-BR');
 };
+
+const formatPatientDateTime = (date?: string | null) => {
+  if (!date) return 'Data e hora não informadas';
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ? new Date(`${date}T12:00:00`)
+    : new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) return 'Data e hora não informadas';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return `${parsed.toLocaleDateString('pt-BR')} · horário não informado`;
+  }
+
+  return parsed.toLocaleString('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  });
+};
+
+const getTimelineDescription = (node: LegacyRecord) =>
+  node.description || node.desc || node.text || '';
+
+const hasEyeValues = (eye?: LegacyRecord) =>
+  Object.values(eye || {}).some((value) => Boolean(value));
+
+const getRxEye = (rx: LegacyRecord, group: 'longe' | 'perto', eye: 'od' | 'oe') => {
+  if (group === 'longe') {
+    return rx.longe?.[eye] || rx[eye] || {};
+  }
+
+  return rx.perto?.[eye] || {};
+};
+
+const getRxLensTypeLabels = (rx: LegacyRecord) => {
+  const lensTypes = rx.lensTypes || rx.lens_types || {};
+  const labels = [];
+
+  if (lensTypes.antireflexo) labels.push('Antirreflexo');
+  if (lensTypes.multifocal) labels.push('Multifocal');
+  if (lensTypes.fotossensivel) labels.push('Fotossensível');
+  if (lensTypes.bluecontrol) labels.push('Bluecontrol');
+
+  return labels;
+};
+
+const formatRxAxis = (value?: string | number | null) => value ? `${value}°` : '-';
+const formatRxDnp = (value?: string | number | null) => value ? `${value} mm` : '-';
+
+const renderRxRefractionTable = (
+  title: string,
+  od: LegacyRecord,
+  oe: LegacyRecord
+) => (
+  <>
+    <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>
+      {title}
+    </div>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
+          <th style={{ padding: '4px' }}>Olho</th>
+          <th style={{ padding: '4px' }}>Esférico</th>
+          <th style={{ padding: '4px' }}>Cilíndrico</th>
+          <th style={{ padding: '4px' }}>Eixo</th>
+          <th style={{ padding: '4px' }}>DNP</th>
+          <th style={{ padding: '4px' }}>AV</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <td style={{ padding: '4px' }}><strong>OD</strong></td>
+          <td>{od.esferico || 'Plano'}</td>
+          <td>{od.cilindrico || '-'}</td>
+          <td>{formatRxAxis(od.eixo)}</td>
+          <td>{formatRxDnp(od.dnp)}</td>
+          <td>{od.av || '-'}</td>
+        </tr>
+        <tr>
+          <td style={{ padding: '4px' }}><strong>OE</strong></td>
+          <td>{oe.esferico || 'Plano'}</td>
+          <td>{oe.cilindrico || '-'}</td>
+          <td>{formatRxAxis(oe.eixo)}</td>
+          <td>{formatRxDnp(oe.dnp)}</td>
+          <td>{oe.av || '-'}</td>
+        </tr>
+      </tbody>
+    </table>
+  </>
+);
 
 const PatientManager = () => {
   const { currentUser } = useAuth();
@@ -139,7 +307,32 @@ const PatientManager = () => {
   } = useApp();
   const dataStatus = { loading, error: '' };
 
-  const canManagePatientStatus = currentUser?.appRole === 'admin' || currentUser?.role === 'admin';
+  const currentUserIsDoctor = isDoctorUser(currentUser);
+  const userCanCreatePatients = canCreatePatients(currentUser);
+  const userCanManagePatientStatus = canManagePatientStatus(currentUser);
+  const userCanManageAdministrativeAlerts = canManageAdministrativeAlerts(currentUser);
+  const userCanViewPatientOsTab = canViewPatientOsTab(currentUser);
+  const userCanEditPatientAdministrativeData = canEditPatientAdministrativeFields(currentUser);
+  const userCanEditPatientProfile = userCanEditPatientAdministrativeData || currentUserIsDoctor;
+  const currentUserProfessional = useMemo<Professional | null>(() => {
+    if (!currentUserIsDoctor || !currentUser) return null;
+
+    return {
+      id: currentUser.id,
+      name: currentUser.name || currentUser.email || 'Médico',
+      specialty: 'Especialista',
+      color: '#2563eb',
+      shopId: currentUser.shopId === 'all' ? null : currentUser.shopId,
+      shopName: currentUser.shopName || null
+    };
+  }, [
+    currentUser,
+    currentUserIsDoctor
+  ]);
+  const prescriptionProfessionals = useMemo(
+    () => currentUserProfessional ? [currentUserProfessional] : professionals,
+    [currentUserProfessional, professionals]
+  );
 
   const triggerPrintRx = (rx: LegacyRecord) => {
     setActivePrintData({
@@ -203,29 +396,46 @@ const PatientManager = () => {
   const [savingPatient, setSavingPatient] = useState(false);
   const [availableShops, setAvailableShops] = useState<Shop[]>([]);
   const [selectedNewPatientShopId, setSelectedNewPatientShopId] = useState('');
+  const [showEditPatientForm, setShowEditPatientForm] = useState(false);
+  const [patientEditForm, setPatientEditForm] = useState(createPatientEditForm());
+  const [editPhoneIsWhatsapp, setEditPhoneIsWhatsapp] = useState(false);
+  const [savingPatientEdit, setSavingPatientEdit] = useState(false);
 
   // Formulário de receita
   const [showRxForm, setShowRxForm] = useState(false);
-  const [newRx, setNewRx] = useState({
-    doctor: professionals[0]?.name || '',
-    longe: {
-      od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
-      oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
-    },
-    perto: {
-      od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
-      oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
-    },
-    adicao: '',
-    lensTypes: {
-      antireflexo: false,
-      multifocal: false,
-      fotossensivel: false,
-      bluecontrol: false
-    },
-    lensType: '',
-    notes: ''
-  });
+  const [editingRxId, setEditingRxId] = useState<string | null>(null);
+  const [expandedRxId, setExpandedRxId] = useState<string | null>(null);
+  const [newRx, setNewRx] = useState(() => createEmptyRxForm());
+
+  useEffect(() => {
+    const selectedProfessional = prescriptionProfessionals[0];
+
+    setNewRx((current) => {
+      if (editingRxId) return current;
+
+      if (!selectedProfessional) {
+        return current.professionalId || current.doctor
+          ? { ...current, professionalId: '', doctor: '' }
+          : current;
+      }
+
+      const currentProfessionalIsAvailable = prescriptionProfessionals.some(
+        (professional) => professional.id === current.professionalId
+      );
+      if (currentProfessionalIsAvailable) return current;
+
+      return {
+        ...current,
+        professionalId: selectedProfessional.id,
+        doctor: selectedProfessional.name
+      };
+    });
+  }, [editingRxId, prescriptionProfessionals]);
+
+  const resetRxForm = useCallback(() => {
+    setEditingRxId(null);
+    setNewRx(createEmptyRxForm(prescriptionProfessionals[0]));
+  }, [prescriptionProfessionals]);
 
   // Formulário de Compra/OS
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
@@ -314,7 +524,7 @@ const PatientManager = () => {
     try {
       const timeline = await patientService.getTimelineEvents(id);
       const rx = await prescriptionService.getByPatient(id);
-      const sales = await saleService.getByPatient(id);
+      const sales = userCanViewPatientOsTab ? await saleService.getByPatient(id) : [];
       const atts = await attachmentService.getPatientAttachments(id);
       setPatientTimeline(timeline);
       setPatientPrescriptions(rx);
@@ -323,7 +533,7 @@ const PatientManager = () => {
     } catch(e) {
       console.error(e);
     }
-  }, []);
+  }, [userCanViewPatientOsTab]);
 
   const selectedPatientIdForData = selectedPatient?.id;
 
@@ -339,8 +549,39 @@ const PatientManager = () => {
     }
   }, [selectedPatientIdForData, loadPatientData]);
 
+  useEffect(() => {
+    setExpandedRxId(null);
+  }, [selectedPatientIdForData]);
+
+  useEffect(() => {
+    setShowEditPatientForm(false);
+    setPatientEditForm(createPatientEditForm(selectedPatient));
+    setEditPhoneIsWhatsapp(
+      Boolean(selectedPatient?.phone) &&
+      onlyDigits(selectedPatient?.phone) === onlyDigits(selectedPatient?.whatsapp)
+    );
+  }, [selectedPatientIdForData]);
+
+  useEffect(() => {
+    if (
+      expandedRxId &&
+      !patientPrescriptions.some((rx) => String(rx.id) === expandedRxId)
+    ) {
+      setExpandedRxId(null);
+    }
+  }, [expandedRxId, patientPrescriptions]);
+
   const selectedPatientAge = getPatientAge(selectedPatient?.birthDate);
   const selectedLastEvent = getLastPatientEvent(selectedPatient);
+  const visiblePatientAlerts = selectedPatient?.alerts?.filter((alert) => (
+    currentUserIsDoctor ? alert.type === 'clinical' : true
+  )) || [];
+
+  useEffect(() => {
+    if (!userCanViewPatientOsTab && activeSubTab === 'purchases') {
+      setActiveSubTab('timeline');
+    }
+  }, [activeSubTab, userCanViewPatientOsTab]);
 
   const handleNewPatientPhoneChange = (value: string) => {
     const formattedPhone = formatBrazilPhone(value);
@@ -359,8 +600,30 @@ const PatientManager = () => {
     }));
   };
 
+  const handleEditPatientPhoneChange = (value: string) => {
+    const formattedPhone = formatBrazilPhone(value);
+    setPatientEditForm((current) => ({
+      ...current,
+      phone: formattedPhone,
+      whatsapp: editPhoneIsWhatsapp ? formattedPhone : current.whatsapp
+    }));
+  };
+
+  const handleEditPhoneIsWhatsappChange = (checked: boolean) => {
+    setEditPhoneIsWhatsapp(checked);
+    setPatientEditForm((current) => ({
+      ...current,
+      whatsapp: checked ? current.phone : current.whatsapp
+    }));
+  };
+
   const handleCreatePatient = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!userCanCreatePatients) {
+      alert('Seu perfil pode consultar prontuários, mas não cria novos cadastros de paciente.');
+      return;
+    }
+
     const cpfDigits = onlyDigits(newPatient.cpf);
     const targetShopId = shouldChoosePatientShop ? selectedNewPatientShopId : fixedPatientShopId;
 
@@ -430,92 +693,214 @@ const PatientManager = () => {
     }
   };
 
-  const handleAddAlert = (e: FormEvent<HTMLFormElement>) => {
+  const handleUpdatePatientProfile = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedPatient || !userCanEditPatientProfile) return;
+
+    const formattedCpf = userCanEditPatientAdministrativeData
+      ? formatCpf(patientEditForm.cpf)
+      : selectedPatient.cpf;
+    const cpfDigits = onlyDigits(formattedCpf);
+
+    if (!patientEditForm.name.trim() || !patientEditForm.birthDate) {
+      alert('Nome e data de nascimento são obrigatórios.');
+      return;
+    }
+
+    if (userCanEditPatientAdministrativeData && cpfDigits.length !== 11) {
+      alert('Informe o CPF com 11 números no formato 000.000.000-00.');
+      return;
+    }
+
+    if (patientEditForm.isMinor && !patientEditForm.guardian.name.trim()) {
+      alert('Informe o nome do responsável legal.');
+      return;
+    }
+
+    const patientPayload: PatientWithLegacyData = {
+      ...selectedPatient,
+      name: patientEditForm.name.trim(),
+      cpf: formattedCpf,
+      rg: patientEditForm.rg.trim(),
+      birthDate: patientEditForm.birthDate,
+      gender: patientEditForm.gender,
+      phone: formatBrazilPhone(patientEditForm.phone),
+      whatsapp: editPhoneIsWhatsapp
+        ? formatBrazilPhone(patientEditForm.phone)
+        : formatBrazilPhone(patientEditForm.whatsapp),
+      email: patientEditForm.email.trim(),
+      address: patientEditForm.address.trim(),
+      isMinor: patientEditForm.isMinor,
+      guardian: patientEditForm.isMinor
+        ? {
+            name: patientEditForm.guardian.name.trim(),
+            cpf: formatCpf(patientEditForm.guardian.cpf),
+            phone: formatBrazilPhone(patientEditForm.guardian.phone)
+          }
+        : { name: '', cpf: '', phone: '' },
+      notes: patientEditForm.notes.trim()
+    };
+
+    try {
+      setSavingPatientEdit(true);
+      await updatePatient(patientPayload);
+      await patientService.addTimelineEvent({
+        patientId: selectedPatient.id,
+        type: 'profile',
+        title: 'Dados cadastrais atualizados',
+        description: currentUserIsDoctor
+          ? 'Atualização cadastral realizada pelo profissional.'
+          : 'Atualização cadastral realizada pela equipe.',
+        shop_id: selectedPatient.shop_id,
+        date: new Date().toISOString()
+      });
+      await loadPatientData(selectedPatient.id);
+      setShowEditPatientForm(false);
+    } catch (error) {
+      console.error(error);
+      alert(`Não foi possível atualizar o paciente: ${getErrorMessage(error)}`);
+    } finally {
+      setSavingPatientEdit(false);
+    }
+  };
+
+  const handleAddAlert = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!alertText.trim() || !selectedPatient) return;
+    const normalizedAlertType = userCanManageAdministrativeAlerts ? alertType : 'clinical';
+    const now = new Date().toISOString();
+    const alertLabel = normalizedAlertType === 'clinical' ? 'Clínico' : 'Administrativo';
 
     const newAlertObj = {
       id: `a-${uuidv4()}`,
-      type: alertType,
+      type: normalizedAlertType,
       text: alertText,
-      color: alertType === 'clinical' ? '#ef4444' : '#f59e0b'
+      color: normalizedAlertType === 'clinical' ? '#ef4444' : '#f59e0b',
+      createdAt: now
     };
 
     const updated = {
       ...selectedPatient,
-      alerts: [...(selectedPatient.alerts || []), newAlertObj],
-      timeline: [
-        {
-          id: `t-${uuidv4()}`,
-          date: new Date().toISOString().split('T')[0],
-          type: 'system',
-          title: `Alerta Adicionado (${alertType === 'clinical' ? 'Clínico' : 'Adm'})`,
-          desc: alertText
-        },
-        ...patientTimeline
-      ]
+      alerts: [...(selectedPatient.alerts || []), newAlertObj]
     };
 
-    updatePatient(updated);
-    setAlertText('');
+    try {
+      await updatePatient(updated);
+      await patientService.addTimelineEvent({
+        patientId: selectedPatient.id,
+        type: 'alert',
+        title: `Alerta ${alertLabel} Adicionado`,
+        description: alertText,
+        shop_id: selectedPatient.shop_id,
+        date: now
+      });
+      await loadPatientData(selectedPatient.id);
+      setAlertText('');
+    } catch (error) {
+      console.error(error);
+      alert(`Não foi possível adicionar o alerta: ${getErrorMessage(error)}`);
+    }
   };
 
-  const handleRemoveAlert = (alertId: string) => {
+  const handleRemoveAlert = async (alertId: string) => {
     if (!selectedPatient) return;
+    const removedAlert = (selectedPatient.alerts || []).find((a) => a.id === alertId);
     const updated = {
       ...selectedPatient,
       alerts: (selectedPatient.alerts || []).filter((a) => a.id !== alertId)
     };
-    updatePatient(updated);
+
+    try {
+      await updatePatient(updated);
+      if (removedAlert) {
+        await patientService.addTimelineEvent({
+          patientId: selectedPatient.id,
+          type: 'alert',
+          title: 'Alerta Removido',
+          description: removedAlert.text,
+          shop_id: selectedPatient.shop_id,
+          date: new Date().toISOString()
+        });
+        await loadPatientData(selectedPatient.id);
+      }
+    } catch (error) {
+      console.error(error);
+      alert(`Não foi possível remover o alerta: ${getErrorMessage(error)}`);
+    }
   };
 
-  const handleAddRx = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSaveRx = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedPatient) return;
+
+    const selectedProfessional = prescriptionProfessionals.find(
+      (professional) => professional.id === newRx.professionalId
+    );
+    if (!selectedProfessional) {
+      alert(
+        currentUserIsDoctor
+          ? 'Seu usuário médico precisa estar ativo em Configurações → Equipe & Acessos para emitir receita.'
+          : 'Cadastre um especialista ativo em Configurações → Equipe & Acessos antes de emitir receita.'
+      );
+      return;
+    }
+
+    const payload: Partial<Prescription> = {
+      patientId: selectedPatient.id,
+      professionalId: selectedProfessional.id,
+      doctor: selectedProfessional.name,
+      notes: newRx.notes,
+      lensType: newRx.lensType,
+      lensTypes: newRx.lensTypes,
+      longe: newRx.longe,
+      perto: newRx.perto,
+      adicao: newRx.adicao,
+      addition: newRx.adicao,
+      shop_id: selectedPatient.shop_id
+    };
+
     try {
-      await prescriptionService.create({
-        patientId: selectedPatient.id,
-        professionalId: professionals.find(p => p.name === newRx.doctor)?.id || null,
-        date: new Date().toISOString().split('T')[0],
-        notes: newRx.notes,
-        shop_id: selectedPatient.shop_id
-      });
+      if (editingRxId) {
+        await prescriptionService.update(editingRxId, payload);
+      } else {
+        await prescriptionService.create({
+          ...payload,
+          date: new Date().toISOString().split('T')[0]
+        });
+      }
+
       await patientService.addTimelineEvent({
         patientId: selectedPatient.id,
         type: 'prescription',
-        title: 'Receita Oftalmológica Emitida',
-        description: `Emitida por Dr(a). ${newRx.doctor}.`,
+        title: editingRxId ? 'Receita Oftalmológica Atualizada' : 'Receita Oftalmológica Emitida',
+        description: `${editingRxId ? 'Atualizada' : 'Emitida'} por Dr(a). ${selectedProfessional.name}.`,
         shop_id: selectedPatient.shop_id,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString()
       });
-      loadPatientData(selectedPatient.id);
+      await loadPatientData(selectedPatient.id);
       
       setShowRxForm(false);
-      setNewRx({
-        doctor: professionals[0]?.name || '',
-        longe: {
-          od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
-          oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
-        },
-        perto: {
-          od: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' },
-          oe: { esferico: '', cilindrico: '', eixo: '', dnp: '', av: '' }
-        },
-        adicao: '',
-        lensTypes: {
-          antireflexo: false,
-          multifocal: false,
-          fotossensivel: false,
-          bluecontrol: false
-        },
-        lensType: '',
-        notes: ''
-      });
-    } catch(e) { console.error(e); }
+      resetRxForm();
+    } catch (error) {
+      console.error(error);
+      alert(`Não foi possível salvar a receita: ${getErrorMessage(error)}`);
+    }
+  };
+
+  const handleEditRx = (rx: LegacyRecord) => {
+    const rxProfessionalId = rx.professionalId || rx.professional_id;
+    const fallbackProfessional = prescriptionProfessionals.find(
+      (professional) => professional.id === rxProfessionalId
+    ) || prescriptionProfessionals[0];
+
+    setEditingRxId(String(rx.id));
+    setNewRx(createRxFormFromPrescription(rx, fallbackProfessional));
+    setShowRxForm(true);
   };
 
   const handleAddPurchase = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!userCanViewPatientOsTab) return;
     if (!selectedPatient || !newPurchase.item || !newPurchase.value) return;
     
     try {
@@ -548,7 +933,7 @@ const PatientManager = () => {
         title: `Nova Venda/OS criada`,
         description: `Item: ${newPurchase.item} - Valor: R$ ${parseFloat(newPurchase.value).toFixed(2)}.`,
         shop_id: selectedPatient.shop_id,
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString()
       });
       loadPatientData(selectedPatient.id);
       
@@ -617,7 +1002,7 @@ const PatientManager = () => {
   };
 
   const handlePatientStatusChange = async (patient: Patient, nextIsActive: boolean) => {
-    if (!canManagePatientStatus) {
+    if (!userCanManagePatientStatus) {
       alert('Apenas administradores podem inativar ou reativar pacientes.');
       return;
     }
@@ -649,13 +1034,15 @@ const PatientManager = () => {
       <PageHeader
         eyebrow="Clínica"
         title="Pacientes"
-        description="Consulte prontuários, acompanhe históricos e gerencie pacientes ativos e inativos."
+        description={currentUserIsDoctor
+          ? 'Consulte seus pacientes vinculados, acompanhe históricos e registre evolução clínica.'
+          : 'Consulte prontuários, acompanhe históricos e gerencie pacientes ativos e inativos.'}
         meta={`${activePatientCount} ativos · ${inactivePatientCount} inativos`}
-        actions={(
+        actions={userCanCreatePatients ? (
           <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
             <UserPlus size={17} /> Novo paciente
           </button>
-        )}
+        ) : null}
       />
 
       <div className="patient-workspace">
@@ -742,7 +1129,9 @@ const PatientManager = () => {
                     : 'Nenhum paciente cadastrado'}
                 description={searchTerm
                   ? 'Confira o nome, CPF ou RG informado.'
-                  : 'Use o botão “Novo paciente” para iniciar um cadastro.'}
+                  : currentUserIsDoctor
+                    ? 'Os pacientes aparecerão quando houver agendamento ou vínculo clínico com seu usuário.'
+                    : 'Use o botão “Novo paciente” para iniciar um cadastro.'}
                 action={searchTerm ? (
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSearchTerm('')}>
                     Limpar busca
@@ -755,6 +1144,9 @@ const PatientManager = () => {
                 const age = getPatientAge(patient.birthDate);
                 const lastEvent = getLastPatientEvent(patient);
                 const isSelected = selectedPatient?.id === patient.id && !showAddForm;
+                const patientAlertCount = currentUserIsDoctor
+                  ? (patient.alerts || []).filter((alert) => alert.type === 'clinical').length
+                  : (patient.alerts || []).length;
 
                 return (
                   <button
@@ -780,13 +1172,13 @@ const PatientManager = () => {
                       <span className="patient-list-last-event">
                         <Clock size={12} />
                         {lastEvent
-                          ? `${lastEvent.title} · ${formatPatientDate(lastEvent.date)}`
+                          ? `${lastEvent.title} · ${formatPatientDateTime(lastEvent.date)}`
                           : 'Sem atendimentos registrados'}
                       </span>
                     </span>
-                    {patient.alerts && patient.alerts.length > 0 && (
-                      <span className="patient-list-alert" title={`${patient.alerts.length} alerta(s) ativo(s)`}>
-                        <AlertTriangle size={13} /> {patient.alerts.length}
+                    {patientAlertCount > 0 && (
+                      <span className="patient-list-alert" title={`${patientAlertCount} alerta(s) ativo(s)`}>
+                        <AlertTriangle size={13} /> {patientAlertCount}
                       </span>
                     )}
                   </button>
@@ -799,7 +1191,7 @@ const PatientManager = () => {
 
       {/* Coluna Direita: Detalhes ou Formulário de Cadastro */}
       <section className="patient-detail-pane">
-        {showAddForm ? (
+        {showAddForm && userCanCreatePatients ? (
           /* Formulário de Novo Paciente */
           <div className="card">
             <div className="card-header">
@@ -1077,26 +1469,272 @@ const PatientManager = () => {
                   </div>
                   <p>
                     {selectedLastEvent
-                      ? `Último registro: ${selectedLastEvent.title} em ${formatPatientDate(selectedLastEvent.date)}`
+                      ? `Último registro: ${selectedLastEvent.title} em ${formatPatientDateTime(selectedLastEvent.date)}`
                       : 'Ainda não há atendimentos registrados neste prontuário.'}
                   </p>
                 </div>
-                {canManagePatientStatus && (
-                  <button
-                    onClick={() => handlePatientStatusChange(selectedPatient, selectedPatient.isActive === false)}
-                    className={`patient-status-button ${selectedPatient.isActive === false ? 'reactivate' : 'deactivate'}`}
-                    title={selectedPatient.isActive === false ? 'Reativar Paciente' : 'Inativar Paciente'}
-                    aria-label={`${selectedPatient.isActive === false ? 'Reativar' : 'Inativar'} ${selectedPatient.name}`}
-                    data-testid="patient-status-button"
-                  >
-                    {selectedPatient.isActive === false ? <RotateCcw size={15} /> : <UserX size={15} />}
-                    <span>{selectedPatient.isActive === false ? 'Reativar' : 'Inativar'}</span>
-                  </button>
-                )}
+                <div className="patient-detail-actions">
+                  {userCanEditPatientProfile && (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditPatientForm((current) => !current)}
+                      className="patient-edit-button"
+                      aria-expanded={showEditPatientForm}
+                      aria-label={`Editar dados cadastrais de ${selectedPatient.name}`}
+                    >
+                      <Pencil size={15} />
+                      <span>{showEditPatientForm ? 'Fechar edição' : 'Editar paciente'}</span>
+                    </button>
+                  )}
+                  {userCanManagePatientStatus && (
+                    <button
+                      onClick={() => handlePatientStatusChange(selectedPatient, selectedPatient.isActive === false)}
+                      className={`patient-status-button ${selectedPatient.isActive === false ? 'reactivate' : 'deactivate'}`}
+                      title={selectedPatient.isActive === false ? 'Reativar Paciente' : 'Inativar Paciente'}
+                      aria-label={`${selectedPatient.isActive === false ? 'Reativar' : 'Inativar'} ${selectedPatient.name}`}
+                      data-testid="patient-status-button"
+                    >
+                      {selectedPatient.isActive === false ? <RotateCcw size={15} /> : <UserX size={15} />}
+                      <span>{selectedPatient.isActive === false ? 'Reativar' : 'Inativar'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Grid de Informações Cadastrais */}
-              <div className="patient-info-grid">
+              {showEditPatientForm ? (
+                <form className="patient-edit-panel" onSubmit={handleUpdatePatientProfile}>
+                  <div className="patient-edit-panel-header">
+                    <div>
+                      <h3>Editar dados do paciente</h3>
+                      <p>
+                        {currentUserIsDoctor
+                          ? 'Você pode corrigir dados cadastrais básicos. CPF, unidade e status permanecem bloqueados.'
+                          : 'Atualize os dados cadastrais do paciente. Unidade e status ficam em controles separados.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setPatientEditForm(createPatientEditForm(selectedPatient));
+                        setShowEditPatientForm(false);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Nome Completo*</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={patientEditForm.name}
+                      onChange={(e) => setPatientEditForm({ ...patientEditForm, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Data de Nascimento*</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        required
+                        value={patientEditForm.birthDate}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, birthDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Sexo</label>
+                      <select
+                        className="form-control"
+                        value={patientEditForm.gender}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, gender: e.target.value })}
+                      >
+                        <option>Masculino</option>
+                        <option>Feminino</option>
+                        <option>Outro</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>CPF*</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="000.000.000-00"
+                        inputMode="numeric"
+                        maxLength={14}
+                        required
+                        value={patientEditForm.cpf}
+                        disabled={!userCanEditPatientAdministrativeData}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, cpf: formatCpf(e.target.value) })}
+                      />
+                      {!userCanEditPatientAdministrativeData && (
+                        <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
+                          CPF bloqueado para edição pelo perfil médico.
+                        </small>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label>RG</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={patientEditForm.rg}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, rg: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Telefone</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="(xx) xxxxx-xxxx"
+                        inputMode="tel"
+                        maxLength={15}
+                        value={patientEditForm.phone}
+                        onChange={(e) => handleEditPatientPhoneChange(e.target.value)}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', fontWeight: 500, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={editPhoneIsWhatsapp}
+                          onChange={(e) => handleEditPhoneIsWhatsappChange(e.target.checked)}
+                          style={{ width: '16px', height: '16px' }}
+                        />
+                        Este número também é WhatsApp
+                      </label>
+                    </div>
+                    <div className="form-group">
+                      <label>WhatsApp</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="(xx) xxxxx-xxxx"
+                        inputMode="tel"
+                        maxLength={15}
+                        value={patientEditForm.whatsapp}
+                        disabled={editPhoneIsWhatsapp}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, whatsapp: formatBrazilPhone(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>E-mail</label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={patientEditForm.email}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Endereço</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={patientEditForm.address}
+                        onChange={(e) => setPatientEditForm({ ...patientEditForm, address: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '16px 0' }}>
+                    <input
+                      type="checkbox"
+                      id="editChkMinor"
+                      checked={patientEditForm.isMinor}
+                      onChange={(e) => setPatientEditForm({ ...patientEditForm, isMinor: e.target.checked })}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="editChkMinor" style={{ margin: 0, cursor: 'pointer' }}>
+                      Este paciente é menor de idade (requer responsável)
+                    </label>
+                  </div>
+
+                  {patientEditForm.isMinor && (
+                    <div className="patient-edit-guardian-box">
+                      <h4>Dados do Responsável Legal</h4>
+                      <div className="form-group">
+                        <label>Nome do Responsável*</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={patientEditForm.guardian.name}
+                          onChange={(e) =>
+                            setPatientEditForm({
+                              ...patientEditForm,
+                              guardian: { ...patientEditForm.guardian, name: e.target.value }
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="form-grid">
+                        <div className="form-group">
+                          <label>CPF do Responsável</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="000.000.000-00"
+                            inputMode="numeric"
+                            maxLength={14}
+                            value={patientEditForm.guardian.cpf}
+                            onChange={(e) =>
+                              setPatientEditForm({
+                                ...patientEditForm,
+                                guardian: { ...patientEditForm.guardian, cpf: formatCpf(e.target.value) }
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Telefone do Responsável</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="(xx) xxxxx-xxxx"
+                            inputMode="tel"
+                            maxLength={15}
+                            value={patientEditForm.guardian.phone}
+                            onChange={(e) =>
+                              setPatientEditForm({
+                                ...patientEditForm,
+                                guardian: { ...patientEditForm.guardian, phone: formatBrazilPhone(e.target.value) }
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="form-group">
+                    <label>Observações Clínicas / Internas</label>
+                    <textarea
+                      className="form-control"
+                      rows={3}
+                      value={patientEditForm.notes}
+                      onChange={(e) => setPatientEditForm({ ...patientEditForm, notes: e.target.value })}
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary" disabled={savingPatientEdit}>
+                    {savingPatientEdit ? 'Salvando alterações...' : 'Salvar alterações do paciente'}
+                  </button>
+                </form>
+              ) : (
+                <div className="patient-info-grid">
                 <div className="patient-info-item">
                   <span><Calendar size={13} /> Nascimento</span>
                   <strong>{formatPatientDate(selectedPatient.birthDate)}</strong>
@@ -1125,10 +1763,11 @@ const PatientManager = () => {
                   <span>Endereço</span>
                   <strong>{selectedPatient.address || 'Não informado'}</strong>
                 </div>
-              </div>
+                </div>
+              )}
 
               {/* Informações do Responsável (se houver) */}
-              {selectedPatient.isMinor && (
+              {!showEditPatientForm && selectedPatient.isMinor && (
                 <div
                   style={{
                     backgroundColor: '#f0f9ff',
@@ -1146,10 +1785,12 @@ const PatientManager = () => {
 
               {/* Gerenciamento de Alertas */}
               <div style={{ marginBottom: '24px' }}>
-                <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>Alertas Clínicos & Administrativos</h4>
+                <h4 style={{ fontSize: '14px', marginBottom: '8px' }}>
+                  {currentUserIsDoctor ? 'Alertas Clínicos' : 'Alertas Clínicos & Administrativos'}
+                </h4>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                  {selectedPatient.alerts && selectedPatient.alerts.length > 0 ? (
-                    selectedPatient.alerts.map((a) => (
+                  {visiblePatientAlerts.length > 0 ? (
+                    visiblePatientAlerts.map((a) => (
                       <span
                         key={a.id}
                         style={{
@@ -1180,49 +1821,65 @@ const PatientManager = () => {
                     <StatePanel
                       type="empty"
                       title="Nenhum alerta neste prontuário"
-                      description="Alertas clínicos ou administrativos aparecerão aqui."
+                      description={currentUserIsDoctor
+                        ? 'Alertas clínicos aparecerão aqui.'
+                        : 'Alertas clínicos ou administrativos aparecerão aqui.'}
                       compact
                     />
                   )}
                 </div>
 
                 <form onSubmit={handleAddAlert} style={{ display: 'flex', gap: '8px' }}>
-                  <select
-                    className="form-control"
-                    style={{ width: '120px', padding: '6px' }}
-                    value={alertType}
-                    onChange={(e) => setAlertType(e.target.value)}
-                    aria-label="Tipo de alerta"
-                  >
-                    <option value="clinical">Clínico</option>
-                    <option value="administrative">Adm</option>
-                  </select>
+                  {userCanManageAdministrativeAlerts ? (
+                    <select
+                      className="form-control"
+                      style={{ width: '120px', padding: '6px' }}
+                      value={alertType}
+                      onChange={(e) => setAlertType(e.target.value)}
+                      aria-label="Tipo de alerta"
+                    >
+                      <option value="clinical">Clínico</option>
+                      <option value="administrative">Adm</option>
+                    </select>
+                  ) : (
+                    <span className="status-badge status-danger" style={{ alignSelf: 'center' }}>
+                      Clínico
+                    </span>
+                  )}
                   <input
                     type="text"
                     className="form-control"
                     style={{ padding: '6px' }}
-                    placeholder="Adicionar aviso rápido..."
+                    placeholder={currentUserIsDoctor ? 'Adicionar alerta clínico...' : 'Adicionar aviso rápido...'}
                     value={alertText}
                     onChange={(e) => setAlertText(e.target.value)}
                     aria-label="Texto do novo alerta"
                   />
-                  <button type="submit" className="btn btn-secondary btn-sm" style={{ padding: '8px 12px' }} aria-label="Adicionar alerta ao prontuário">
+                  <button
+                    type="submit"
+                    className="btn btn-secondary btn-sm"
+                    style={{ padding: '8px 12px', minWidth: currentUserIsDoctor ? '148px' : 'auto' }}
+                    aria-label="Adicionar alerta ao prontuário"
+                  >
                     <Plus size={16} />
+                    {currentUserIsDoctor && <span>Adicionar alerta</span>}
                   </button>
                 </form>
               </div>
 
               {/* Sub-Navegação interna (Abas do Prontuário) */}
-              <div className="tab-container" style={{ marginBottom: '16px' }} role="group" aria-label="Seções do prontuário">
+              <div className="tab-container patient-record-tabs" style={{ marginBottom: '16px' }} role="group" aria-label="Seções do prontuário">
                 <button type="button" aria-pressed={activeSubTab === 'timeline'} className={`tab-btn ${activeSubTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveSubTab('timeline')}>
                   Linha do Tempo
                 </button>
                 <button type="button" aria-pressed={activeSubTab === 'rx'} className={`tab-btn ${activeSubTab === 'rx' ? 'active' : ''}`} onClick={() => setActiveSubTab('rx')}>
                   Receitas ({patientPrescriptions?.length || 0})
                 </button>
-                <button type="button" aria-pressed={activeSubTab === 'purchases'} className={`tab-btn ${activeSubTab === 'purchases' ? 'active' : ''}`} onClick={() => setActiveSubTab('purchases')}>
-                  Compras / OS ({patientSales?.length || 0})
-                </button>
+                {userCanViewPatientOsTab && (
+                  <button type="button" aria-pressed={activeSubTab === 'purchases'} className={`tab-btn ${activeSubTab === 'purchases' ? 'active' : ''}`} onClick={() => setActiveSubTab('purchases')}>
+                    Compras / OS ({patientSales?.length || 0})
+                  </button>
+                )}
                 <button type="button" aria-pressed={activeSubTab === 'clinical'} className={`tab-btn ${activeSubTab === 'clinical' ? 'active' : ''}`} onClick={() => setActiveSubTab('clinical')}>
                   Prontuário Clínico
                 </button>
@@ -1246,9 +1903,11 @@ const PatientManager = () => {
                           <div className="timeline-content">
                             <div className="timeline-header">
                               <span className="timeline-title">{node.title}</span>
-                              <span className="timeline-date">{formatPatientDate(node.date)}</span>
+                              <span className="timeline-date">{formatPatientDateTime(node.date)}</span>
                             </div>
-                            <p className="timeline-desc">{node.desc}</p>
+                            {getTimelineDescription(node) && (
+                              <p className="timeline-desc">{getTimelineDescription(node)}</p>
+                            )}
                           </div>
                         </div>
                       ))
@@ -1263,22 +1922,60 @@ const PatientManager = () => {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '15px', margin: 0 }}>Histórico de Receitas</h4>
-                    <button className="btn btn-primary btn-sm" onClick={() => setShowRxForm(!showRxForm)}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => {
+                        if (showRxForm) {
+                          setShowRxForm(false);
+                          resetRxForm();
+                          return;
+                        }
+                        resetRxForm();
+                        setShowRxForm(true);
+                      }}
+                    >
                       {showRxForm ? 'Fechar' : 'Emitir Receita'}
                     </button>
                   </div>
 
                   {showRxForm && (
-                    <form onSubmit={handleAddRx} style={{ border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', backgroundColor: 'var(--bg-primary)' }}>
+                    <form onSubmit={handleSaveRx} style={{ border: '1px solid var(--border-color)', padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', backgroundColor: 'var(--bg-primary)' }}>
+                      {editingRxId && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '12px', padding: '10px 12px', borderRadius: 'var(--radius-sm)', backgroundColor: 'rgba(37, 99, 235, 0.08)', color: 'var(--primary)', fontSize: '13px', fontWeight: 700 }}>
+                          <span>Editando receita já emitida.</span>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            onClick={resetRxForm}
+                          >
+                            Cancelar edição
+                          </button>
+                        </div>
+                      )}
                       <div className="form-group">
                         <label>Profissional Emissor*</label>
                         <select
                           className="form-control"
-                          value={newRx.doctor}
-                          onChange={(e) => setNewRx({ ...newRx, doctor: e.target.value })}
+                          required
+                          value={newRx.professionalId}
+                          onChange={(e) => {
+                            const selectedProfessional = prescriptionProfessionals.find(
+                              (professional) => professional.id === e.target.value
+                            );
+                            setNewRx({
+                              ...newRx,
+                              professionalId: e.target.value,
+                              doctor: selectedProfessional?.name || ''
+                            });
+                          }}
+                          disabled={currentUserIsDoctor}
                         >
-                          {professionals.map((prof) => (
-                            <option key={prof.id} value={prof.name}>{prof.name}</option>
+                          {prescriptionProfessionals.length === 0 && (
+                            <option value="">Nenhum especialista ativo cadastrado</option>
+                          )}
+                          {prescriptionProfessionals.map((prof) => (
+                            <option key={prof.id} value={prof.id}>{prof.name}</option>
                           ))}
                         </select>
                       </div>
@@ -1361,120 +2058,134 @@ const PatientManager = () => {
                       </div>
 
                       <button type="submit" className="btn btn-primary btn-sm" style={{ width: '100%' }}>
-                        Gravar e Emitir Receita
+                        {editingRxId ? 'Atualizar Receita' : 'Gravar e Emitir Receita'}
                       </button>
                     </form>
                   )}
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {patientPrescriptions && patientPrescriptions.length > 0 ? (
-                      patientPrescriptions.map((rx) => (
-                        <div key={rx.id} style={{ border: '1px solid var(--border-color)', padding: '14px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-secondary)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', alignItems: 'center' }}>
-                            <strong>Dr(a). {rx.doctor}</strong>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>{formatPatientDate(rx.date)}</span>
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                style={{ padding: '2px 8px', fontSize: '11px', height: 'auto' }}
-                                onClick={() => triggerPrintRx(rx)}
-                              >
-                                Imprimir
-                              </button>
+                      patientPrescriptions.map((rx, index) => {
+                        const rxId = String(rx.id);
+                        const rxProfessionalId = rx.professionalId || rx.professional_id;
+                        const canEditRx = userCanManagePatientStatus || (currentUserIsDoctor && rxProfessionalId === currentUser?.id);
+                        const isExpanded = expandedRxId === rxId;
+                        const isLatestRx = index === 0;
+                        const longeOd = getRxEye(rx, 'longe', 'od');
+                        const longeOe = getRxEye(rx, 'longe', 'oe');
+                        const pertoOd = getRxEye(rx, 'perto', 'od');
+                        const pertoOe = getRxEye(rx, 'perto', 'oe');
+                        const hasNearRx = hasEyeValues(pertoOd) || hasEyeValues(pertoOe);
+                        const lensTypeLabels = getRxLensTypeLabels(rx);
+                        const rxDate = formatPatientDateTime(rx.createdAt || rx.created_at || rx.date);
+                        const summaryPieces = [
+                          rx.lensType ? `Lente: ${rx.lensType}` : null,
+                          lensTypeLabels.length > 0 ? `${lensTypeLabels.length} filtro(s)` : null,
+                          rx.notes ? `Obs.: ${rx.notes}` : null
+                        ].filter(Boolean);
+
+                        return (
+                          <div
+                            key={rx.id}
+                            style={{
+                              border: `1px solid ${isLatestRx ? 'rgba(37, 99, 235, 0.35)' : 'var(--border-color)'}`,
+                              padding: '12px',
+                              borderRadius: 'var(--radius-md)',
+                              backgroundColor: isExpanded ? 'var(--bg-secondary)' : 'var(--bg-primary)'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                              <div style={{ minWidth: 0, flex: '1 1 240px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                                  {isLatestRx && (
+                                    <span style={{
+                                      fontSize: '10px',
+                                      fontWeight: 800,
+                                      color: 'var(--primary)',
+                                      backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                      borderRadius: '999px',
+                                      padding: '2px 8px',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.04em'
+                                    }}>
+                                      Mais recente
+                                    </span>
+                                  )}
+                                  <strong style={{ fontSize: '13px' }}>
+                                    Dr(a). {rx.doctor || 'Profissional não informado'}
+                                  </strong>
+                                </div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: summaryPieces.length > 0 ? '4px' : 0 }}>
+                                  {rxDate}
+                                </div>
+                                {summaryPieces.length > 0 && (
+                                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.35 }}>
+                                    {summaryPieces.join(' · ')}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  aria-expanded={isExpanded}
+                                  style={{ padding: '4px 9px', fontSize: '11px', height: 'auto' }}
+                                  onClick={() => setExpandedRxId(isExpanded ? null : rxId)}
+                                >
+                                  {isExpanded ? 'Ocultar' : 'Ver detalhes'}
+                                </button>
+                                {canEditRx && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '4px 9px', fontSize: '11px', height: 'auto' }}
+                                    onClick={() => handleEditRx(rx)}
+                                  >
+                                    Editar
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ padding: '4px 9px', fontSize: '11px', height: 'auto' }}
+                                  onClick={() => triggerPrintRx(rx)}
+                                >
+                                  Imprimir
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          
-                          {/* Longe Table */}
-                          <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>LONGE</div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
-                            <thead>
-                              <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
-                                <th style={{ padding: '4px' }}>Olho</th>
-                                <th style={{ padding: '4px' }}>Esférico</th>
-                                <th style={{ padding: '4px' }}>Cilíndrico</th>
-                                <th style={{ padding: '4px' }}>Eixo</th>
-                                <th style={{ padding: '4px' }}>DNP</th>
-                                <th style={{ padding: '4px' }}>AV</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                <td style={{ padding: '4px' }}><strong>OD</strong></td>
-                                <td>{((rx.longe?.od || rx.od)?.esferico) || 'Plano'}</td>
-                                <td>{((rx.longe?.od || rx.od)?.cilindrico) || '-'}</td>
-                                <td>{((rx.longe?.od || rx.od)?.eixo) ? `${(rx.longe?.od || rx.od).eixo}°` : '-'}</td>
-                                <td>{((rx.longe?.od || rx.od)?.dnp) ? `${(rx.longe?.od || rx.od).dnp} mm` : '-'}</td>
-                                <td>{((rx.longe?.od || rx.od)?.av) || '-'}</td>
-                              </tr>
-                              <tr>
-                                <td style={{ padding: '4px' }}><strong>OE</strong></td>
-                                <td>{((rx.longe?.oe || rx.oe)?.esferico) || 'Plano'}</td>
-                                <td>{((rx.longe?.oe || rx.oe)?.cilindrico) || '-'}</td>
-                                <td>{((rx.longe?.oe || rx.oe)?.eixo) ? `${(rx.longe?.oe || rx.oe).eixo}°` : '-'}</td>
-                                <td>{((rx.longe?.oe || rx.oe)?.dnp) ? `${(rx.longe?.oe || rx.oe).dnp} mm` : '-'}</td>
-                                <td>{((rx.longe?.oe || rx.oe)?.av) || '-'}</td>
-                              </tr>
-                            </tbody>
-                          </table>
 
-                          {/* Perto Table */}
-                          {rx.perto && (rx.perto.od?.esferico || rx.perto.oe?.esferico) && (
-                            <>
-                              <div style={{ fontSize: '11px', fontWeight: 'bold', margin: '4px 0 2px', color: 'var(--primary)' }}>PERTO</div>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginBottom: '8px', textAlign: 'center' }}>
-                                <thead>
-                                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
-                                    <th style={{ padding: '4px' }}>Olho</th>
-                                    <th style={{ padding: '4px' }}>Esférico</th>
-                                    <th style={{ padding: '4px' }}>Cilíndrico</th>
-                                    <th style={{ padding: '4px' }}>Eixo</th>
-                                    <th style={{ padding: '4px' }}>DNP</th>
-                                    <th style={{ padding: '4px' }}>AV</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                    <td style={{ padding: '4px' }}><strong>OD</strong></td>
-                                    <td>{rx.perto.od.esferico || 'Plano'}</td>
-                                    <td>{rx.perto.od.cilindrico || '-'}</td>
-                                    <td>{rx.perto.od.eixo ? `${rx.perto.od.eixo}°` : '-'}</td>
-                                    <td>{rx.perto.od.dnp ? `${rx.perto.od.dnp} mm` : '-'}</td>
-                                    <td>{rx.perto.od.av || '-'}</td>
-                                  </tr>
-                                  <tr>
-                                    <td style={{ padding: '4px' }}><strong>OE</strong></td>
-                                    <td>{rx.perto.oe.esferico || 'Plano'}</td>
-                                    <td>{rx.perto.oe.cilindrico || '-'}</td>
-                                    <td>{rx.perto.oe.eixo ? `${rx.perto.oe.eixo}°` : '-'}</td>
-                                    <td>{rx.perto.oe.dnp ? `${rx.perto.oe.dnp} mm` : '-'}</td>
-                                    <td>{rx.perto.oe.av || '-'}</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </>
-                          )}
+                            {isExpanded && (
+                              <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '10px', paddingTop: '10px' }}>
+                                {renderRxRefractionTable('LONGE', longeOd, longeOe)}
 
-                          {/* Adição e Tipo Lente */}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px', margin: '8px 0', borderTop: '1px solid #eee', paddingTop: '8px' }}>
-                            {(rx.adicao || rx.od?.adicao || rx.oe?.adicao) && (
-                              <span><strong>Adição:</strong> {rx.adicao || rx.od?.adicao || rx.oe?.adicao}</span>
+                                {hasNearRx && renderRxRefractionTable('PERTO', pertoOd, pertoOe)}
+
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px', margin: '8px 0' }}>
+                                  {(rx.adicao || rx.od?.adicao || rx.oe?.adicao) && (
+                                    <span><strong>Adição:</strong> {rx.adicao || rx.od?.adicao || rx.oe?.adicao}</span>
+                                  )}
+                                  {lensTypeLabels.length > 0 && (
+                                    <span><strong>Filtros/Tipo:</strong> {lensTypeLabels.join(', ')}</span>
+                                  )}
+                                </div>
+
+                                {rx.lensType && (
+                                  <p style={{ fontSize: '12px', margin: '4px 0' }}>
+                                    <strong>Sugestão de Lente:</strong> {rx.lensType}
+                                  </p>
+                                )}
+                                {rx.notes && (
+                                  <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', margin: '4px 0' }}>
+                                    “{rx.notes}”
+                                  </p>
+                                )}
+                              </div>
                             )}
-                            {(() => {
-                              const types = [];
-                              if (rx.lensTypes?.antireflexo) types.push('Antirreflexo');
-                              if (rx.lensTypes?.multifocal) types.push('Multifocal');
-                              if (rx.lensTypes?.fotossensivel) types.push('Fotossensível');
-                              if (rx.lensTypes?.bluecontrol) types.push('Bluecontrol');
-                              return types.length > 0 ? (
-                                <span><strong>Filtros/Tipo:</strong> {types.join(', ')}</span>
-                              ) : null;
-                            })()}
                           </div>
-                          {rx.lensType && <p style={{ fontSize: '12px', margin: '4px 0' }}><strong>Sugestão de Lente:</strong> {rx.lensType}</p>}
-                          {rx.notes && <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-muted)', margin: '4px 0' }}>"{rx.notes}"</p>}
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <StatePanel
                         type="empty"
@@ -1487,7 +2198,7 @@ const PatientManager = () => {
                 </div>
               )}
 
-              {activeSubTab === 'purchases' && (
+              {activeSubTab === 'purchases' && userCanViewPatientOsTab && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '15px', margin: 0 }}>Ordens de Serviço e Compras</h4>

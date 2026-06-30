@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
+  ChevronRight,
   Copy,
   KeyRound,
   RefreshCw,
   Save,
+  Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -32,6 +34,13 @@ const ROLE_OPTIONS = [
 ];
 
 const ALL_SHOPS_OPTION = { value: 'all', label: 'Todas as Filiais' };
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'active', label: 'Ativos' },
+  { value: 'inactive', label: 'Inativos' },
+  { value: 'password', label: 'Senha pendente' },
+  { value: 'all', label: 'Todos' }
+];
 
 type TeamUser = {
   id: string;
@@ -78,6 +87,12 @@ const formatAccessDate = (value?: string | null) => {
   }).format(new Date(value));
 };
 
+const getRoleLabel = (role: string) =>
+  ROLE_OPTIONS.find((option) => option.value === role)?.label || role;
+
+const getUserInitial = (name: string) =>
+  name.trim().charAt(0).toUpperCase() || '?';
+
 export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
   const canUseRemoteManagement =
     isSupabaseConfigured && Boolean(currentUser);
@@ -101,10 +116,45 @@ export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [resetCompleted, setResetCompleted] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
 
   const activeAdminCount = users.filter((user) =>
     user.role === 'admin' && user.isActive
   ).length;
+
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return users.filter((user) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        user.name.toLowerCase().includes(normalizedSearch) ||
+        user.email.toLowerCase().includes(normalizedSearch);
+      const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && user.isActive) ||
+        (statusFilter === 'inactive' && !user.isActive) ||
+        (statusFilter === 'password' && user.mustChangePassword);
+
+      return matchesSearch && matchesRole && matchesStatus;
+    }).sort((firstUser, secondUser) =>
+      firstUser.name.localeCompare(secondUser.name, 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [roleFilter, searchTerm, statusFilter, users]);
+
+  const selectedUser = useMemo(() => {
+    if (selectedUserId) {
+      const user = users.find((teamUser) => teamUser.id === selectedUserId);
+      if (user) return user;
+    }
+
+    return filteredUsers[0] || null;
+  }, [filteredUsers, selectedUserId, users]);
+
 
   const getDefaultShopId = useCallback(() => {
     return shops.find((shop) => shop.isActive)?.id || '';
@@ -217,6 +267,17 @@ export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
       cancelled = true;
     };
   }, [canUseRemoteManagement]);
+
+  useEffect(() => {
+    if (filteredUsers.length === 0) {
+      if (selectedUserId) setSelectedUserId('');
+      return;
+    }
+
+    if (!selectedUserId || !filteredUsers.some((user) => user.id === selectedUserId)) {
+      setSelectedUserId(filteredUsers[0].id);
+    }
+  }, [filteredUsers, selectedUserId]);
 
   const updateDraft = (userId: string, field: keyof UserDraft, value: string) => {
     setDrafts((current) => ({
@@ -577,23 +638,84 @@ export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
             compact
           />
         ) : (
-          <div className="team-user-list">
-            {users.map((user) => {
+          <>
+            <div className="team-directory-toolbar" aria-label="Filtros de usuários">
+              <label className="team-search-field" htmlFor="team-user-search">
+                <Search size={16} />
+                <input
+                  id="team-user-search"
+                  type="search"
+                  className="form-control"
+                  placeholder="Buscar por nome ou e-mail"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
+              </label>
+
+              <select
+                className="form-control"
+                aria-label="Filtrar por função"
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+              >
+                <option value="all">Todas as funções</option>
+                {ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+
+              <select
+                className="form-control"
+                aria-label="Filtrar por status"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                {STATUS_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <StatePanel
+                type="empty"
+                title="Nenhum usuário nesse filtro"
+                description="Ajuste a busca, função ou status para localizar outro colaborador."
+                compact
+              />
+            ) : (
+              <div className="team-user-list team-user-list-compact">
+                {filteredUsers.map((user) => {
               const draft = drafts[user.id] || { role: user.role, shopId: user.shopId };
               const isOperating = operationUserId === user.id;
               const hasChanges = draft.role !== user.role || draft.shopId !== user.shopId;
+              const isSelected = selectedUser?.id === user.id;
 
               return (
-                <article key={user.id} className={`team-user-card ${!user.isActive ? 'is-inactive' : ''}`}>
-                  <div className="team-user-summary">
+                <article key={user.id} className={`team-user-card ${!user.isActive ? 'is-inactive' : ''} ${isSelected ? 'is-selected' : ''}`}>
+                  <button
+                    type="button"
+                    className="team-user-summary team-user-select"
+                    onClick={() => setSelectedUserId(user.id)}
+                    aria-expanded={isSelected}
+                    aria-label={`Editar acesso de ${user.name}`}
+                  >
+                    <span className="team-user-avatar" aria-hidden="true">{getUserInitial(user.name)}</span>
                     <div className="team-user-identity">
                       <strong>{user.name}</strong>
-                      <span>{user.email}</span>
+                      <span>{getRoleLabel(user.role)}</span>
+                      <small>{user.shopName || (user.shopId === 'all' ? 'Todas as Filiais' : 'Filial não informada')}</small>
                     </div>
-                    <StatusBadge status={user.isActive ? 'ativo' : 'inativo'} />
-                  </div>
+                    <span className="team-user-status-stack">
+                      <StatusBadge status={user.isActive ? 'ativo' : 'inativo'} />
+                      <ChevronRight size={16} className="team-user-chevron" aria-hidden="true" />
+                    </span>
+                  </button>
 
+                  {isSelected && (
+                    <>
                   <div className="team-user-meta">
+                    <span>{user.email}</span>
                     <span>Último acesso: {formatAccessDate(user.lastSignInAt)}</span>
                     <div className="team-user-flags">
                       {user.mustChangePassword && <span className="team-password-label">Troca de senha pendente</span>}
@@ -748,10 +870,14 @@ export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
                       </div>
                     </form>
                   )}
+                    </>
+                  )}
                 </article>
               );
-            })}
-          </div>
+                })}
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

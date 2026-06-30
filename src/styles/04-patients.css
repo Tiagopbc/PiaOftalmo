@@ -359,6 +359,97 @@
   filter: saturate(1.15);
 }
 
+.patient-detail-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.patient-edit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border-color));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-primary));
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.patient-edit-button:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.15);
+}
+
+.patient-edit-panel {
+  padding: 18px;
+  margin-bottom: 22px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border-color));
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 45%),
+    var(--bg-primary);
+}
+
+.patient-edit-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.patient-edit-panel-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.patient-edit-panel-header p {
+  max-width: 640px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.patient-edit-guardian-box {
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+}
+
+.patient-edit-guardian-box h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.patient-record-tabs {
+  overflow-y: visible;
+}
+
+@media (min-width: 901px) {
+  .patient-record-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 15;
+    margin-right: -26px;
+    margin-left: -26px;
+    padding: 10px 26px 0;
+    background: var(--bg-secondary);
+  }
+}
+
 .patient-info-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -406,4 +497,3 @@
 .patient-info-wide {
   grid-column: span 3;
 }
-

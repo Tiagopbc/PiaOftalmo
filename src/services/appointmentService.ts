@@ -42,6 +42,15 @@ export const appointmentService = {
     if (error) throw error;
     return (data || []).map(mapAppToCamel) as Appointment[];
   },
+  async getByProfessional(professionalId: string): Promise<Appointment[]> {
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('professional_id', professionalId);
+    if (error) throw error;
+    return (data || []).map(mapAppToCamel) as Appointment[];
+  },
   async create(app: Partial<Appointment>): Promise<void> {
     if (!isSupabaseConfigured) return;
     const { error } = await supabase.from('appointments').insert(mapAppToSnake(app));

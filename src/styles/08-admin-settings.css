@@ -292,6 +292,32 @@
   color: var(--status-pendente-text);
 }
 
+.team-directory-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 190px) minmax(140px, 170px);
+  gap: 10px;
+  margin: 16px 0 12px;
+}
+
+.team-search-field {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.team-search-field svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--text-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.team-search-field .form-control {
+  padding-left: 38px;
+}
+
 .team-user-list {
   display: flex;
   max-height: 640px;
@@ -302,11 +328,19 @@
   overflow-y: auto;
 }
 
+.team-user-list-compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 600px;
+}
+
 .team-user-card {
-  padding: 16px;
+  min-width: 0;
+  padding: 10px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
 .team-user-card.is-inactive {
@@ -314,12 +348,53 @@
   background: color-mix(in srgb, var(--bg-primary) 88%, var(--text-muted));
 }
 
+.team-user-card.is-selected {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+  box-shadow: var(--shadow-sm);
+  background: color-mix(in srgb, var(--primary) 4%, var(--bg-primary));
+}
+
+.team-user-select {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.team-user-select:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 5px;
+  border-radius: var(--radius-sm);
+}
+
+.team-user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .team-user-identity {
   min-width: 0;
 }
 
 .team-user-identity strong,
-.team-user-identity span {
+.team-user-identity span,
+.team-user-identity small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -328,19 +403,44 @@
 
 .team-user-identity strong {
   color: var(--text-title);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .team-user-identity span,
+.team-user-identity small,
 .team-user-meta {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10.5px;
+}
+
+.team-user-identity small {
+  margin-top: 1px;
+  font-weight: 700;
+}
+
+.team-user-status-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.team-user-chevron {
+  color: var(--text-muted);
+  transition: transform 0.18s ease;
+}
+
+.team-user-card.is-selected .team-user-chevron {
+  transform: rotate(90deg);
 }
 
 .team-user-meta {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 10px;
-  margin: 7px 0 14px;
+  margin: 10px 0 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
 }
 
 .team-self-label {
@@ -494,6 +594,14 @@
 }
 
 @media (max-width: 700px) {
+  .team-directory-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .team-user-list-compact {
+    grid-template-columns: 1fr;
+  }
+
   .filter-toolbar,
   .filter-toolbar-fields {
     align-items: stretch;
@@ -627,4 +735,3 @@
     padding: 22px 14px;
   }
 }
-

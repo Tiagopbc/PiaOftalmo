@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePatients } from '../context/PatientContext';
 import { useAppointments } from '../context/AppointmentContext';
@@ -6,6 +6,7 @@ import { useWaitlist } from '../context/WaitlistContext';
 import { useApp } from '../context/AppContext';
 import { SERVICE_TYPES, PAYMENT_TYPES } from '../utils/constants';
 import { timeToMinutes, isTimeInSlot, getTimeOptions } from '../utils/helpers';
+import { canManageAppointments, isDoctorUser } from '../utils/roles';
 import PageHeader from './PageHeader';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
@@ -28,6 +29,22 @@ const AgendaManager = () => {
   const { professionals, rooms } = useApp();
 
   const userShopId = currentUser?.shopId;
+  const currentUserIsDoctor = isDoctorUser(currentUser);
+  const userCanManageAppointments = canManageAppointments(currentUser);
+  const currentDoctorProfessional = currentUserIsDoctor && currentUser
+    ? {
+        id: currentUser.id,
+        name: currentUser.name || currentUser.email || 'Médico',
+        specialty: 'Especialista',
+        color: '#2563eb',
+        shopId: currentUser.shopId === 'all' ? null : currentUser.shopId,
+        shopName: currentUser.shopName || null
+      }
+    : null;
+  const visibleProfessionals = currentUserIsDoctor
+    ? (currentDoctorProfessional ? [currentDoctorProfessional] : [])
+    : professionals;
+  const firstVisibleProfessionalId = visibleProfessionals[0]?.id || '';
   const activePatients = patients.filter((patient) => patient.isActive !== false);
 
   // Filtros da Agenda
@@ -39,7 +56,7 @@ const AgendaManager = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newApp, setNewApp] = useState({
     patientId: '',
-    professionalId: professionals[0]?.id || '',
+    professionalId: firstVisibleProfessionalId,
     roomId: rooms[0]?.id || '',
     serviceId: 'consulta',
     paymentType: 'particular',
@@ -53,7 +70,7 @@ const AgendaManager = () => {
   const [newWaitItem, setNewWaitItem] = useState({
     patientName: '',
     phone: '',
-    preferredDoctor: 'Dr. Roberto Mendes',
+    preferredDoctor: 'Qualquer profissional',
     service: 'Consulta Geral'
   });
 
@@ -62,6 +79,31 @@ const AgendaManager = () => {
   ]);
   const [blockTime, setBlockTime] = useState('12:00');
   const [blockReason, setBlockReason] = useState('');
+
+  useEffect(() => {
+    const firstProfessionalId = firstVisibleProfessionalId;
+
+    setNewApp((current) => {
+      if (!firstProfessionalId || current.professionalId) return current;
+      return { ...current, professionalId: firstProfessionalId };
+    });
+  }, [firstVisibleProfessionalId]);
+
+  useEffect(() => {
+    if (currentUserIsDoctor && currentUser?.id) {
+      setFilterProfessional(currentUser.id);
+    }
+  }, [currentUser?.id, currentUserIsDoctor]);
+
+  useEffect(() => {
+    if (currentUserIsDoctor) return;
+    if (
+      filterProfessional !== 'all' &&
+      !professionals.some((professional) => professional.id === filterProfessional)
+    ) {
+      setFilterProfessional('all');
+    }
+  }, [currentUserIsDoctor, filterProfessional, professionals]);
 
   // Horários de atendimento na clínica (08:00 às 18:00)
   const timeSlots = [
@@ -74,6 +116,7 @@ const AgendaManager = () => {
   // Adicionar bloqueio de horário
   const handleAddBlock = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!userCanManageAppointments) return;
     if (!blockReason.trim()) return;
     setBlockedSlots((prev) => [
       ...prev,
@@ -83,14 +126,24 @@ const AgendaManager = () => {
   };
 
   const handleRemoveBlock = (id: string) => {
+    if (!userCanManageAppointments) return;
     setBlockedSlots((prev) => prev.filter((b) => b.id !== id));
   };
 
   // Enviar agendamento
-  const handleScheduleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleScheduleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!userCanManageAppointments) {
+      alert('Seu perfil visualiza a agenda, mas não cria novos agendamentos.');
+      return;
+    }
     if (!newApp.patientId) {
       alert('Por favor, selecione um paciente!');
+      return;
+    }
+
+    if (!newApp.professionalId) {
+      alert('Cadastre um especialista ativo em Configurações → Equipe & Acessos antes de agendar.');
       return;
     }
 
@@ -143,11 +196,16 @@ const AgendaManager = () => {
     }
 
     // Criar agendamento
-    addAppointment({
+    const result = await addAppointment({
       ...newApp,
       patientName: patient ? patient.name : 'Paciente',
       serviceName: service ? service.name : 'Consulta'
     });
+
+    if (!result.success) {
+      alert(result.error || 'Não foi possível criar o agendamento.');
+      return;
+    }
 
     setShowAddModal(false);
   };
@@ -155,13 +213,14 @@ const AgendaManager = () => {
   // Fila de espera
   const handleAddWaitlist = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!userCanManageAppointments) return;
     if (!newWaitItem.patientName || !newWaitItem.phone) return;
     addWaitlist(newWaitItem);
     setShowWaitlistForm(false);
     setNewWaitItem({
       patientName: '',
       phone: '',
-      preferredDoctor: 'Dr. Roberto Mendes',
+      preferredDoctor: 'Qualquer profissional',
       service: 'Consulta Geral'
     });
   };
@@ -169,6 +228,7 @@ const AgendaManager = () => {
   // Filtragem dos agendamentos do dia de acordo com as seleções e filial
   const dailyAppointments = appointments.filter((app) => {
     if (app.date !== selectedDate) return false;
+    if (currentUserIsDoctor && app.professionalId !== currentUser?.id) return false;
     if (filterProfessional !== 'all' && app.professionalId !== filterProfessional) return false;
     if (filterRoom !== 'all' && app.roomId !== filterRoom) return false;
 
@@ -184,9 +244,11 @@ const AgendaManager = () => {
   );
 
   const openNewAppointment = () => {
+    if (!userCanManageAppointments) return;
     setNewApp((prev) => ({
       ...prev,
       date: selectedDate,
+      professionalId: prev.professionalId || firstVisibleProfessionalId,
       isEncaixe: false,
       time: '08:00'
     }));
@@ -197,14 +259,16 @@ const AgendaManager = () => {
     <div className="page-stack">
       <PageHeader
         eyebrow="Atendimento"
-        title="Agenda & Consultas"
-        description="Organize a rotina clínica, bloqueios de horário e a fila de espera."
+        title={currentUserIsDoctor ? 'Minha Agenda' : 'Agenda & Consultas'}
+        description={currentUserIsDoctor
+          ? 'Visualize seus atendimentos e avance o fluxo clínico do dia.'
+          : 'Organize a rotina clínica, bloqueios de horário e a fila de espera.'}
         meta={`${dailyAppointments.length} ${dailyAppointments.length === 1 ? 'agendamento' : 'agendamentos'} na data selecionada`}
-        actions={(
+        actions={userCanManageAppointments ? (
           <button className="btn btn-primary" onClick={openNewAppointment}>
             <Plus size={17} /> Novo agendamento
           </button>
-        )}
+        ) : null}
       />
 
       <div className="section-grid agenda-layout">
@@ -227,22 +291,27 @@ const AgendaManager = () => {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="agenda-filter-professional">Filtrar Profissional</label>
-            <select
-              id="agenda-filter-professional"
-              className="form-control"
-              value={filterProfessional}
-              onChange={(e) => setFilterProfessional(e.target.value)}
-            >
-              <option value="all">Todos os Profissionais</option>
-              {professionals.map((prof) => (
-                <option key={prof.id} value={prof.id}>
-                  {prof.name} ({prof.specialty})
-                </option>
-              ))}
-            </select>
-          </div>
+          {!currentUserIsDoctor && (
+            <div className="form-group">
+              <label htmlFor="agenda-filter-professional">Filtrar Profissional</label>
+              <select
+                id="agenda-filter-professional"
+                className="form-control"
+                value={filterProfessional}
+                onChange={(e) => setFilterProfessional(e.target.value)}
+              >
+                <option value="all">Todos os Profissionais</option>
+                {visibleProfessionals.length === 0 && (
+                  <option value="" disabled>Nenhum especialista ativo cadastrado</option>
+                )}
+                {visibleProfessionals.map((prof) => (
+                  <option key={prof.id} value={prof.id}>
+                    {prof.name} ({prof.specialty})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="agenda-filter-room">Filtrar Sala</label>
@@ -264,6 +333,7 @@ const AgendaManager = () => {
         </div>
 
         {/* Bloqueio de Horários */}
+        {userCanManageAppointments && (
         <div className="card">
           <h3 className="card-title" style={{ marginBottom: '16px' }}>
             <Clock size={18} color="var(--text-muted)" /> Bloqueios de Horário
@@ -335,8 +405,10 @@ const AgendaManager = () => {
             )}
           </div>
         </div>
+        )}
 
         {/* Fila de Espera */}
+        {userCanManageAppointments && (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 className="card-title">
@@ -397,6 +469,7 @@ const AgendaManager = () => {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* Coluna Direita: Grade Horária */}
@@ -456,13 +529,14 @@ const AgendaManager = () => {
                       <span style={{ color: '#64748b', fontSize: '13px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <AlertCircle size={14} /> Horário Reservado / Bloqueado: <strong>{blockInfo?.reason}</strong>
                       </span>
-                    ) : slotAppointments.length === 0 ? (
+                    ) : slotAppointments.length === 0 && userCanManageAppointments ? (
                       <button
                         onClick={() => {
                           setNewApp((prev) => ({
                             ...prev,
                             time,
                             date: selectedDate,
+                            professionalId: prev.professionalId || firstVisibleProfessionalId,
                             isEncaixe: false
                           }));
                           setShowAddModal(true);
@@ -484,9 +558,13 @@ const AgendaManager = () => {
                       >
                         + Clique para agendar um paciente
                       </button>
+                    ) : slotAppointments.length === 0 ? (
+                      <span style={{ color: '#94a3b8', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        Horário disponível
+                      </span>
                     ) : (
                       slotAppointments.map((app) => {
-                        const doc = professionals.find((p) => p.id === app.professionalId);
+                        const doc = visibleProfessionals.find((p) => p.id === app.professionalId);
                         const room = rooms.find((r) => r.id === app.roomId);
 
                         return (
@@ -530,7 +608,28 @@ const AgendaManager = () => {
                             <div className="agenda-appointment-controls">
                               <StatusBadge status={app.status} />
 
-                              {app.status === 'confirmado' && (
+                              {currentUserIsDoctor ? (
+                                <div className="agenda-appointment-actions">
+                                  {app.status === 'confirmado' && (
+                                    <button
+                                      onClick={() => updateAppointmentStatus(app.id, 'em_atendimento')}
+                                      className="btn btn-primary btn-sm"
+                                      title="Iniciar atendimento"
+                                    >
+                                      Iniciar
+                                    </button>
+                                  )}
+                                  {app.status === 'em_atendimento' && (
+                                    <button
+                                      onClick={() => updateAppointmentStatus(app.id, 'atendido')}
+                                      className="btn btn-success btn-sm"
+                                      title="Finalizar atendimento"
+                                    >
+                                      Finalizar
+                                    </button>
+                                  )}
+                                </div>
+                              ) : app.status === 'confirmado' && (
                                 <div className="agenda-appointment-actions">
                                   <button
                                     onClick={() => updateAppointmentStatus(app.id, 'atendido')}
@@ -594,7 +693,7 @@ const AgendaManager = () => {
       </div>
 
       {/* Modal para agendar compromisso */}
-      {showAddModal && (
+      {showAddModal && userCanManageAppointments && (
         <div className="modal-overlay">
           <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="appointment-dialog-title">
             <h3 id="appointment-dialog-title" style={{ marginBottom: '16px' }}>Agendar Novo Atendimento</h3>
@@ -650,10 +749,14 @@ const AgendaManager = () => {
                   <select
                     id="appointment-professional"
                     className="form-control"
+                    required
                     value={newApp.professionalId}
                     onChange={(e) => setNewApp({ ...newApp, professionalId: e.target.value })}
                   >
-                    {professionals.map((prof) => (
+                    {visibleProfessionals.length === 0 && (
+                      <option value="">Nenhum especialista ativo cadastrado</option>
+                    )}
+                    {visibleProfessionals.map((prof) => (
                       <option key={prof.id} value={prof.id}>{prof.name}</option>
                     ))}
                   </select>

@@ -6,6 +6,8 @@ const STATUS_VARIANTS = {
   entregue: 'success',
   particular: 'success',
   confirmado: 'info',
+  'em atendimento': 'info',
+  em_atendimento: 'info',
   convenio: 'info',
   'convênio': 'info',
   'em produção': 'info',

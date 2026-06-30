@@ -89,6 +89,7 @@ describe('TeamAccessManager', () => {
     expect(userCard).toBeTruthy();
     if (!userCard) throw new Error('Card da usuária teste não encontrado.');
 
+    fireEvent.click(within(userCard).getByRole('button', { name: /Editar acesso de Usuária Teste/i }));
     fireEvent.click(within(userCard).getByRole('button', { name: 'Redefinir senha' }));
     fireEvent.click(within(userCard).getByRole('button', { name: 'Aplicar senha temporária' }));
 

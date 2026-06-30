@@ -81,10 +81,15 @@ export interface Prescription {
   id: string;
   patientId: string;
   professionalId?: string;
+  doctor?: string;
   date: string;
   validityDate?: string;
   glassesType?: string;
   lensType?: string;
+  lensTypes?: Record<string, boolean>;
+  longe?: any;
+  perto?: any;
+  adicao?: string;
   odSph?: string;
   odCyl?: string;
   odAxis?: string;
@@ -95,6 +100,7 @@ export interface Prescription {
   notes?: string;
   shop_id?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Sale {

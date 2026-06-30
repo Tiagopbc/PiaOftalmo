@@ -9,6 +9,7 @@ import { getInventoryItems } from '../services/inventoryService';
 import { Users, Calendar, ShoppingBag, ListPlus, AlertTriangle, CheckCircle, XCircle, Clock, Glasses, ArrowRight, DollarSign, Package } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { StatePanel } from './StatePanel';
+import { canManageAppointments, canViewOperationalDashboard, isDoctorUser } from '../utils/roles';
 import type { Appointment, InventoryItem, Sale } from '../types';
 
 type QuickAction = {
@@ -43,9 +44,18 @@ const Dashboard = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const userShopId = currentUser?.shopId;
+  const currentUserIsDoctor = isDoctorUser(currentUser);
+  const userCanManageAppointments = canManageAppointments(currentUser);
+  const userCanViewOperationalDashboard = canViewOperationalDashboard(currentUser);
 
   // Load Sales and Inventory
   useEffect(() => {
+    if (!userCanViewOperationalDashboard) {
+      setSales([]);
+      setInventory([]);
+      return;
+    }
+
     saleService.getAll().then(data => {
       if (userShopId && userShopId !== 'all') {
         setSales(data.filter(s => s.shop_id === userShopId));
@@ -58,7 +68,7 @@ const Dashboard = () => {
       const fetchShop = userShopId === 'all' ? undefined : userShopId;
       getInventoryItems(fetchShop).then(setInventory).catch(console.error);
     }
-  }, [userShopId]);
+  }, [userShopId, userCanViewOperationalDashboard]);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -80,25 +90,47 @@ const Dashboard = () => {
     triggerToast('Paciente adicionado à fila de espera!');
   };
 
-  const quickActions: QuickAction[] = [
+  const operationalQuickActions: QuickAction[] = [
     { id: 'encaixe', label: 'Novo agendamento', icon: <Calendar size={20} />, color: 'var(--primary)', bgColor: 'var(--primary-light)', tab: 'agenda' },
     { id: 'waitlist', label: 'Fila de espera', icon: <ListPlus size={20} />, color: 'var(--accent)', bgColor: 'var(--accent-light)', tab: 'agenda' },
     { id: 'optical', label: 'Nova OS', icon: <Glasses size={20} />, color: '#8b5cf6', bgColor: '#f5f3ff', tab: 'optical' },
     { id: 'patients', label: 'Novo paciente', icon: <Users size={20} />, color: '#ec4899', bgColor: '#fdf2f8', tab: 'patients' }
   ];
+  const doctorQuickActions: QuickAction[] = [
+    { id: 'agenda', label: 'Minha agenda', icon: <Calendar size={20} />, color: 'var(--primary)', bgColor: 'var(--primary-light)', tab: 'agenda' },
+    { id: 'patients', label: 'Meus pacientes', icon: <Users size={20} />, color: 'var(--accent)', bgColor: 'var(--accent-light)', tab: 'patients' }
+  ];
+  const quickActions = currentUserIsDoctor ? doctorQuickActions : operationalQuickActions;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const formattedToday = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
   const firstName = currentUser?.name?.split(' ')[0] || 'equipe';
   const activePatients = patients.filter((patient) => patient.isActive !== false);
 
-  const shopApps = appointments.filter(app => !userShopId || userShopId === 'all' || app.shop_id === userShopId || !app.shop_id);
+  const shopApps = appointments.filter(app => {
+    if (currentUserIsDoctor && app.professionalId !== currentUser?.id) return false;
+    return !userShopId || userShopId === 'all' || app.shop_id === userShopId || !app.shop_id;
+  });
   const shopWaitlist = waitlist.filter(item => !userShopId || userShopId === 'all' || item.shop_id === userShopId || !item.shop_id);
 
   const todayApps = shopApps.filter(app => app.date === todayStr).sort((a, b) => String(a.time).localeCompare(String(b.time)));
   const waitlistCount = shopWaitlist.length;
-  // confirmedToday removed to satisfy lint
   const completedToday = todayApps.filter(app => app.status === 'atendido').length;
+  const confirmedToday = todayApps.filter(app => app.status === 'confirmado').length;
+  const inCareToday = todayApps.filter(app => app.status === 'em_atendimento').length;
+  const statusFilters = currentUserIsDoctor
+    ? ['todos', 'confirmado', 'em_atendimento', 'atendido']
+    : ['todos', 'confirmado', 'atendido', 'falta', 'cancelado'];
+
+  useEffect(() => {
+    const allowedFilters = currentUserIsDoctor
+      ? ['todos', 'confirmado', 'em_atendimento', 'atendido']
+      : ['todos', 'confirmado', 'atendido', 'falta', 'cancelado'];
+
+    if (!allowedFilters.includes(filterKey)) {
+      setFilterKey('todos');
+    }
+  }, [filterKey, currentUserIsDoctor]);
 
   // Real Metrics from DB
   const activeOSCount = sales.filter(s => s.status !== 'Entregue' && s.status !== 'Cancelado').length;
@@ -108,7 +140,9 @@ const Dashboard = () => {
     .reduce((acc, s) => acc + (Number(s.totalAmount) || 0), 0);
 
   // Alerts
-  const clinicalAlerts = activePatients.flatMap(p => (p.alerts || []).map(alert => ({ ...alert, patientName: p.name, patientId: p.id })));
+  const clinicalAlerts = userCanViewOperationalDashboard
+    ? activePatients.flatMap(p => (p.alerts || []).map(alert => ({ ...alert, patientName: p.name, patientId: p.id })))
+    : [];
   const lowStockAlerts = inventory.filter(item => item.quantity <= item.minQuantity).map(item => ({
     id: item.id,
     type: 'inventory',
@@ -124,7 +158,7 @@ const Dashboard = () => {
   };
 
   const handleQuickAction = (action: QuickAction) => {
-    if (action.id === 'waitlist') {
+    if (action.id === 'waitlist' && userCanManageAppointments) {
       setShowAddWait(prev => !prev);
       return;
     }
@@ -143,12 +177,18 @@ const Dashboard = () => {
 
       <header className="db-hero">
         <div className="db-hero-copy">
-          <span className="patient-eyebrow">Visão operacional e financeira</span>
+          <span className="patient-eyebrow">
+            {currentUserIsDoctor ? 'Visão clínica' : 'Visão operacional e financeira'}
+          </span>
           <h2>Olá, {firstName}</h2>
           <p>
             <span>{formattedToday}</span>
             <span aria-hidden="true">•</span>
-            <span>{activePatients.length} pacientes ativos</span>
+            <span>
+              {currentUserIsDoctor
+                ? `${todayApps.length} atendimento(s) na sua agenda`
+                : `${activePatients.length} pacientes ativos`}
+            </span>
           </p>
         </div>
         <div className="db-header-actions">
@@ -161,7 +201,7 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <div className="db-grid">
+      <div className="db-grid" style={!userCanViewOperationalDashboard ? { gridTemplateColumns: '1fr' } : undefined}>
         <div className="db-left">
           <div className="db-stat-grid">
             <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
@@ -174,35 +214,71 @@ const Dashboard = () => {
               <ArrowRight size={16} />
             </button>
 
-            <button type="button" className="db-stat-card" onClick={() => setActiveTab('optical')}>
-              <div className="stat-icon warning"><ShoppingBag size={24} /></div>
-              <div>
-                <strong>{activeOSCount}</strong>
-                <span>OS em aberto</span>
-                <small>Produção e pagamento</small>
-              </div>
-              <ArrowRight size={16} />
-            </button>
+            {currentUserIsDoctor ? (
+              <>
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
+                  <div className="stat-icon primary"><Clock size={24} /></div>
+                  <div>
+                    <strong>{confirmedToday}</strong>
+                    <span>Aguardando atendimento</span>
+                    <small>Confirmados para hoje</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
 
-            <button type="button" className="db-stat-card" onClick={() => setActiveTab('finance')}>
-              <div className="stat-icon" style={{ backgroundColor: '#dcfce7', color: '#166534' }}><DollarSign size={24} /></div>
-              <div>
-                <strong>R$ {monthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
-                <span>Faturamento do Mês</span>
-                <small>Óptica + Clínica</small>
-              </div>
-              <ArrowRight size={16} />
-            </button>
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
+                  <div className="stat-icon warning"><Clock size={24} /></div>
+                  <div>
+                    <strong>{inCareToday}</strong>
+                    <span>Em atendimento</span>
+                    <small>Atendimentos iniciados</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
 
-            <button type="button" className="db-stat-card" onClick={() => setActiveTab('inventory')}>
-              <div className="stat-icon danger"><Package size={24} /></div>
-              <div>
-                <strong>{lowStockAlerts.length}</strong>
-                <span>Alertas de Estoque</span>
-                <small>Itens abaixo do mínimo</small>
-              </div>
-              <ArrowRight size={16} />
-            </button>
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
+                  <div className="stat-icon accent"><CheckCircle size={24} /></div>
+                  <div>
+                    <strong>{completedToday}</strong>
+                    <span>Finalizados hoje</span>
+                    <small>Atendimentos concluídos</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('optical')}>
+                  <div className="stat-icon warning"><ShoppingBag size={24} /></div>
+                  <div>
+                    <strong>{activeOSCount}</strong>
+                    <span>OS em aberto</span>
+                    <small>Produção e pagamento</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('finance')}>
+                  <div className="stat-icon" style={{ backgroundColor: '#dcfce7', color: '#166534' }}><DollarSign size={24} /></div>
+                  <div>
+                    <strong>R$ {monthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                    <span>Faturamento do Mês</span>
+                    <small>Óptica + Clínica</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('inventory')}>
+                  <div className="stat-icon danger"><Package size={24} /></div>
+                  <div>
+                    <strong>{lowStockAlerts.length}</strong>
+                    <span>Alertas de Estoque</span>
+                    <small>Itens abaixo do mínimo</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+              </>
+            )}
           </div>
 
           <div className="card db-agenda-card">
@@ -212,8 +288,10 @@ const Dashboard = () => {
             </div>
 
             <div className="filter-tabs" style={{ marginBottom: '20px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {['todos', 'confirmado', 'atendido', 'falta', 'cancelado'].map((status) => (
-                <button key={status} type="button" onClick={() => setFilterKey(status)} className={`filter-tab ${filterKey === status ? 'active' : ''}`}>{status}</button>
+              {statusFilters.map((status) => (
+                <button key={status} type="button" onClick={() => setFilterKey(status)} className={`filter-tab ${filterKey === status ? 'active' : ''}`}>
+                  {status === 'em_atendimento' ? 'em atendimento' : status}
+                </button>
               ))}
             </div>
 
@@ -235,7 +313,16 @@ const Dashboard = () => {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <StatusBadge status={app.status} />
-                        {app.status === 'confirmado' && (
+                        {currentUserIsDoctor ? (
+                          <div className="app-actions-hover">
+                            {app.status === 'confirmado' && (
+                              <button onClick={() => updateAppointmentStatus(app.id, 'em_atendimento')} className="icon-button" title="Iniciar atendimento"><Clock size={15} /></button>
+                            )}
+                            {app.status === 'em_atendimento' && (
+                              <button onClick={() => updateAppointmentStatus(app.id, 'atendido')} className="icon-button" title="Finalizar atendimento"><CheckCircle size={15} /></button>
+                            )}
+                          </div>
+                        ) : app.status === 'confirmado' && (
                           <div className="app-actions-hover">
                             <button onClick={() => updateAppointmentStatus(app.id, 'atendido')} className="icon-button" title="Finalizar Atendimento"><CheckCircle size={15} /></button>
                             <button onClick={() => setCancelTarget(app)} className="icon-button" title="Cancelar Agendamento"><XCircle size={15} /></button>
@@ -251,6 +338,7 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {userCanViewOperationalDashboard && (
         <div className="db-right">
           <div className="card" style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -314,6 +402,7 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {cancelTarget && (
