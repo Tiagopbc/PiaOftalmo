@@ -45,12 +45,16 @@ const AgendaManager = () => {
     ? (currentDoctorProfessional ? [currentDoctorProfessional] : [])
     : professionals;
   const firstVisibleProfessionalId = visibleProfessionals[0]?.id || '';
+  const lockedDoctorProfessionalId = currentUserIsDoctor ? currentUser?.id || firstVisibleProfessionalId : '';
   const activePatients = patients.filter((patient) => patient.isActive !== false);
 
   // Filtros da Agenda
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [filterProfessional, setFilterProfessional] = useState('all');
   const [filterRoom, setFilterRoom] = useState('all');
+  const effectiveProfessionalFilter = currentUserIsDoctor
+    ? lockedDoctorProfessionalId
+    : filterProfessional;
 
   // Modais e formulários
   const [showAddModal, setShowAddModal] = useState(false);
@@ -84,14 +88,24 @@ const AgendaManager = () => {
     const firstProfessionalId = firstVisibleProfessionalId;
 
     setNewApp((current) => {
+      if (currentUserIsDoctor) {
+        if (!firstProfessionalId || current.professionalId === firstProfessionalId) return current;
+        return { ...current, professionalId: firstProfessionalId };
+      }
+
       if (!firstProfessionalId || current.professionalId) return current;
       return { ...current, professionalId: firstProfessionalId };
     });
-  }, [firstVisibleProfessionalId]);
+  }, [currentUserIsDoctor, firstVisibleProfessionalId]);
 
   useEffect(() => {
     if (currentUserIsDoctor && currentUser?.id) {
       setFilterProfessional(currentUser.id);
+      setNewApp((current) => (
+        current.professionalId === currentUser.id
+          ? current
+          : { ...current, professionalId: currentUser.id }
+      ));
     }
   }, [currentUser?.id, currentUserIsDoctor]);
 
@@ -228,8 +242,7 @@ const AgendaManager = () => {
   // Filtragem dos agendamentos do dia de acordo com as seleções e filial
   const dailyAppointments = appointments.filter((app) => {
     if (app.date !== selectedDate) return false;
-    if (currentUserIsDoctor && app.professionalId !== currentUser?.id) return false;
-    if (filterProfessional !== 'all' && app.professionalId !== filterProfessional) return false;
+    if (effectiveProfessionalFilter && effectiveProfessionalFilter !== 'all' && app.professionalId !== effectiveProfessionalFilter) return false;
     if (filterRoom !== 'all' && app.roomId !== filterRoom) return false;
 
     // Filtro por Loja/Filial
@@ -248,7 +261,7 @@ const AgendaManager = () => {
     setNewApp((prev) => ({
       ...prev,
       date: selectedDate,
-      professionalId: prev.professionalId || firstVisibleProfessionalId,
+      professionalId: lockedDoctorProfessionalId || prev.professionalId || firstVisibleProfessionalId,
       isEncaixe: false,
       time: '08:00'
     }));
@@ -291,7 +304,13 @@ const AgendaManager = () => {
             />
           </div>
 
-          {!currentUserIsDoctor && (
+          {currentUserIsDoctor ? (
+            <div className="form-group agenda-locked-professional">
+              <span>Profissional</span>
+              <strong>{currentDoctorProfessional?.name || currentUser?.name || 'Médico logado'}</strong>
+              <small>Agenda travada para o profissional logado.</small>
+            </div>
+          ) : (
             <div className="form-group">
               <label htmlFor="agenda-filter-professional">Filtrar Profissional</label>
               <select

@@ -387,6 +387,34 @@
   white-space: nowrap;
 }
 
+.agenda-locked-professional {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border-color));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--primary) 6%, var(--bg-primary));
+}
+
+.agenda-locked-professional span,
+.agenda-locked-professional small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agenda-locked-professional span {
+  margin-bottom: 3px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agenda-locked-professional strong {
+  display: block;
+  color: var(--text-title);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
 @media (max-width: 1400px) {
   .agenda-appointment-controls {
     flex-basis: 100%;

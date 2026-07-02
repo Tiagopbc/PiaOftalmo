@@ -96,11 +96,7 @@ const Dashboard = () => {
     { id: 'optical', label: 'Nova OS', icon: <Glasses size={20} />, color: '#8b5cf6', bgColor: '#f5f3ff', tab: 'optical' },
     { id: 'patients', label: 'Novo paciente', icon: <Users size={20} />, color: '#ec4899', bgColor: '#fdf2f8', tab: 'patients' }
   ];
-  const doctorQuickActions: QuickAction[] = [
-    { id: 'agenda', label: 'Minha agenda', icon: <Calendar size={20} />, color: 'var(--primary)', bgColor: 'var(--primary-light)', tab: 'agenda' },
-    { id: 'patients', label: 'Meus pacientes', icon: <Users size={20} />, color: 'var(--accent)', bgColor: 'var(--accent-light)', tab: 'patients' }
-  ];
-  const quickActions = currentUserIsDoctor ? doctorQuickActions : operationalQuickActions;
+  const quickActions = currentUserIsDoctor ? [] : operationalQuickActions;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const formattedToday = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -115,9 +111,7 @@ const Dashboard = () => {
 
   const todayApps = shopApps.filter(app => app.date === todayStr).sort((a, b) => String(a.time).localeCompare(String(b.time)));
   const waitlistCount = shopWaitlist.length;
-  const completedToday = todayApps.filter(app => app.status === 'atendido').length;
   const confirmedToday = todayApps.filter(app => app.status === 'confirmado').length;
-  const inCareToday = todayApps.filter(app => app.status === 'em_atendimento').length;
   const statusFilters = currentUserIsDoctor
     ? ['todos', 'confirmado', 'em_atendimento', 'atendido']
     : ['todos', 'confirmado', 'atendido', 'falta', 'cancelado'];
@@ -168,7 +162,7 @@ const Dashboard = () => {
   const filteredTodayApps = todayApps.filter(app => filterKey === 'todos' ? true : app.status === filterKey);
 
   return (
-    <div className="db-container">
+    <div className={`db-container ${currentUserIsDoctor ? 'is-doctor-dashboard' : ''}`}>
       {toastMessage && (
         <div style={{ position: 'fixed', top: '24px', right: '24px', backgroundColor: 'var(--primary)', color: 'white', padding: '12px 24px', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)', zIndex: 1100, fontSize: '14px', fontWeight: 600, animation: 'fadeIn 0.3s ease' }}>
           {toastMessage}
@@ -191,29 +185,21 @@ const Dashboard = () => {
             </span>
           </p>
         </div>
-        <div className="db-header-actions">
-          {quickActions.map((action) => (
-            <button type="button" key={action.id} className="db-header-action" onClick={() => handleQuickAction(action)}>
-              <span style={{ color: action.color, backgroundColor: action.bgColor }}>{action.icon}</span>
-              <strong>{action.label}</strong>
-            </button>
-          ))}
-        </div>
+        {quickActions.length > 0 && (
+          <div className="db-header-actions">
+            {quickActions.map((action) => (
+              <button type="button" key={action.id} className="db-header-action" onClick={() => handleQuickAction(action)}>
+                <span style={{ color: action.color, backgroundColor: action.bgColor }}>{action.icon}</span>
+                <strong>{action.label}</strong>
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       <div className="db-grid" style={!userCanViewOperationalDashboard ? { gridTemplateColumns: '1fr' } : undefined}>
         <div className="db-left">
           <div className="db-stat-grid">
-            <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
-              <div className="stat-icon primary"><Calendar size={24} /></div>
-              <div>
-                <strong>{todayApps.length}</strong>
-                <span>Atendimentos hoje</span>
-                <small>{completedToday} concluído(s)</small>
-              </div>
-              <ArrowRight size={16} />
-            </button>
-
             {currentUserIsDoctor ? (
               <>
                 <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
@@ -227,27 +213,37 @@ const Dashboard = () => {
                 </button>
 
                 <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
-                  <div className="stat-icon warning"><Clock size={24} /></div>
+                  <div className="stat-icon accent"><Calendar size={24} /></div>
                   <div>
-                    <strong>{inCareToday}</strong>
-                    <span>Em atendimento</span>
-                    <small>Atendimentos iniciados</small>
+                    <strong>{todayApps.length}</strong>
+                    <span>Minha Agenda</span>
+                    <small>Atendimentos vinculados a você</small>
                   </div>
                   <ArrowRight size={16} />
                 </button>
 
-                <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
-                  <div className="stat-icon accent"><CheckCircle size={24} /></div>
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('patients')}>
+                  <div className="stat-icon warning"><Users size={24} /></div>
                   <div>
-                    <strong>{completedToday}</strong>
-                    <span>Finalizados hoje</span>
-                    <small>Atendimentos concluídos</small>
+                    <strong>{activePatients.length}</strong>
+                    <span>Meus Pacientes</span>
+                    <small>Pacientes vinculados ao seu atendimento</small>
                   </div>
                   <ArrowRight size={16} />
                 </button>
               </>
             ) : (
               <>
+                <button type="button" className="db-stat-card" onClick={() => setActiveTab('agenda')}>
+                  <div className="stat-icon primary"><Calendar size={24} /></div>
+                  <div>
+                    <strong>{todayApps.length}</strong>
+                    <span>Atendimentos hoje</span>
+                    <small>{todayApps.filter(app => app.status === 'atendido').length} concluído(s)</small>
+                  </div>
+                  <ArrowRight size={16} />
+                </button>
+
                 <button type="button" className="db-stat-card" onClick={() => setActiveTab('optical')}>
                   <div className="stat-icon warning"><ShoppingBag size={24} /></div>
                   <div>

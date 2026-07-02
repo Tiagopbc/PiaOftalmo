@@ -22,16 +22,10 @@ import {
 } from '../utils/passwords';
 import { shopService, type Shop } from '../services/shopService';
 import type { UserProfile } from '../types';
+import { getRoleLabel, ROLE_OPTIONS } from '../utils/roles';
 import { PasswordRequirements } from './PasswordRequirements';
 import { StatePanel } from './StatePanel';
 import { StatusBadge } from './StatusBadge';
-
-const ROLE_OPTIONS = [
-  { value: 'recepcao', label: 'Recepção' },
-  { value: 'medico', label: 'Especialista (Médico)' },
-  { value: 'vendedor', label: 'Vendedor (Óptica)' },
-  { value: 'admin', label: 'Administrador Geral' }
-];
 
 const ALL_SHOPS_OPTION = { value: 'all', label: 'Todas as Filiais' };
 
@@ -86,9 +80,6 @@ const formatAccessDate = (value?: string | null) => {
     timeStyle: 'short'
   }).format(new Date(value));
 };
-
-const getRoleLabel = (role: string) =>
-  ROLE_OPTIONS.find((option) => option.value === role)?.label || role;
 
 const getUserInitial = (name: string) =>
   name.trim().charAt(0).toUpperCase() || '?';
@@ -269,15 +260,16 @@ export const TeamAccessManager = ({ currentUser }: TeamAccessManagerProps) => {
   }, [canUseRemoteManagement]);
 
   useEffect(() => {
-    if (filteredUsers.length === 0) {
-      if (selectedUserId) setSelectedUserId('');
-      return;
-    }
+    setSelectedUserId((currentSelectedUserId) => {
+      if (filteredUsers.length === 0) return '';
 
-    if (!selectedUserId || !filteredUsers.some((user) => user.id === selectedUserId)) {
-      setSelectedUserId(filteredUsers[0].id);
-    }
-  }, [filteredUsers, selectedUserId]);
+      const selectedUserStillVisible = filteredUsers.some((user) =>
+        user.id === currentSelectedUserId
+      );
+
+      return selectedUserStillVisible ? currentSelectedUserId : filteredUsers[0].id;
+    });
+  }, [filteredUsers]);
 
   const updateDraft = (userId: string, field: keyof UserDraft, value: string) => {
     setDrafts((current) => ({

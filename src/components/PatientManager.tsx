@@ -333,6 +333,7 @@ const PatientManager = () => {
     () => currentUserProfessional ? [currentUserProfessional] : professionals,
     [currentUserProfessional, professionals]
   );
+  const doctorDisplayName = currentUserProfessional?.name || currentUser?.name || 'médico logado';
 
   const triggerPrintRx = (rx: LegacyRecord) => {
     setActivePrintData({
@@ -1033,7 +1034,7 @@ const PatientManager = () => {
     <div className="page-stack">
       <PageHeader
         eyebrow="Clínica"
-        title="Pacientes"
+        title={currentUserIsDoctor ? `Pacientes de Dr(a). ${doctorDisplayName}` : 'Pacientes'}
         description={currentUserIsDoctor
           ? 'Consulte seus pacientes vinculados, acompanhe históricos e registre evolução clínica.'
           : 'Consulte prontuários, acompanhe históricos e gerencie pacientes ativos e inativos.'}
@@ -1858,11 +1859,11 @@ const PatientManager = () => {
                   <button
                     type="submit"
                     className="btn btn-secondary btn-sm"
-                    style={{ padding: '8px 12px', minWidth: currentUserIsDoctor ? '148px' : 'auto' }}
-                    aria-label="Adicionar alerta ao prontuário"
+                    style={{ padding: '8px 12px', minWidth: currentUserIsDoctor ? '184px' : 'auto' }}
+                    aria-label={currentUserIsDoctor ? 'Adicionar alerta clínico ao prontuário' : 'Adicionar alerta ao prontuário'}
                   >
                     <Plus size={16} />
-                    {currentUserIsDoctor && <span>Adicionar alerta</span>}
+                    {currentUserIsDoctor && <span>Adicionar alerta clínico</span>}
                   </button>
                 </form>
               </div>

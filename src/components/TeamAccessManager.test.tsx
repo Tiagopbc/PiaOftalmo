@@ -85,11 +85,19 @@ describe('TeamAccessManager', () => {
 
     expect(await screen.findByText('Cobertura administrativa protegida')).toBeTruthy();
 
-    const userCard = screen.getByText('Usuária Teste').closest('article');
+    let userCard = screen.getByText('Usuária Teste').closest('article');
     expect(userCard).toBeTruthy();
     if (!userCard) throw new Error('Card da usuária teste não encontrado.');
 
     fireEvent.click(within(userCard).getByRole('button', { name: /Editar acesso de Usuária Teste/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Redefinir senha' })).toBeTruthy();
+    });
+
+    userCard = screen.getByText('Usuária Teste').closest('article');
+    if (!userCard) throw new Error('Card expandido da usuária teste não encontrado.');
+
     fireEvent.click(within(userCard).getByRole('button', { name: 'Redefinir senha' }));
     fireEvent.click(within(userCard).getByRole('button', { name: 'Aplicar senha temporária' }));
 

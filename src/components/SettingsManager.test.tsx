@@ -5,7 +5,8 @@ import { AuthContext } from '../context/AuthContext';
 import SettingsManager from './SettingsManager';
 
 const mocks = vi.hoisted(() => ({
-  updateUser: vi.fn()
+  updateUser: vi.fn(),
+  rpc: vi.fn()
 }));
 
 vi.mock('../utils/supabaseClient', () => ({
@@ -13,7 +14,8 @@ vi.mock('../utils/supabaseClient', () => ({
   supabase: {
     auth: {
       updateUser: mocks.updateUser
-    }
+    },
+    rpc: mocks.rpc
   }
 }));
 
@@ -58,6 +60,8 @@ describe('SettingsManager - alteração de senha', () => {
   beforeEach(() => {
     mocks.updateUser.mockReset();
     mocks.updateUser.mockResolvedValue({ error: null });
+    mocks.rpc.mockReset();
+    mocks.rpc.mockResolvedValue({ error: null });
     vi.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
@@ -90,6 +94,25 @@ describe('SettingsManager - alteração de senha', () => {
     await waitFor(() => {
       expect(mocks.updateUser).toHaveBeenCalledWith({ password: 'NovaSenha#123' });
       expect(window.alert).toHaveBeenCalledWith('Senha atualizada com sucesso!');
+    });
+  });
+
+  it('sincroniza o nome de exibição no perfil público e no Auth', async () => {
+    renderSettings();
+
+    fireEvent.change(screen.getByLabelText('Nome Completo / Exibição*'), {
+      target: { value: '  Médico Teste  ' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar Alterações' }));
+
+    await waitFor(() => {
+      expect(mocks.rpc).toHaveBeenCalledWith('update_own_profile_name', {
+        new_full_name: 'Médico Teste'
+      });
+      expect(mocks.updateUser).toHaveBeenCalledWith({
+        data: { name: 'Médico Teste' }
+      });
+      expect(window.alert).toHaveBeenCalledWith('Nome de perfil atualizado com sucesso!');
     });
   });
 });

@@ -89,6 +89,16 @@ const isStrongPassword = (password: string) =>
     /[0-9]/.test(password) &&
     /[!-/:-@[-`{-~]/.test(password);
 
+const getCleanText = (value: unknown) =>
+    typeof value === 'string' ? value.trim() : '';
+
+const getUserDisplayName = (user: AuthUser, profile?: ProfileRecord | null) => {
+  const metadataName = getCleanText(user.user_metadata?.name);
+  const profileName = getCleanText(profile?.full_name);
+
+  return metadataName || profileName || user.email?.split('@')[0] || 'Usuário';
+};
+
 const jsonResponse = (body: unknown, status = 200) =>
     Response.json(body, {
       status,
@@ -278,7 +288,7 @@ const serializeUser = (
   return {
     id: user.id,
     email: user.email || '',
-    name: String(profile?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário'),
+    name: getUserDisplayName(user, profile),
     role,
     shopId: role === 'admin'
         ? 'all'
@@ -532,7 +542,7 @@ denoRuntime.serve(async (request: Request) => {
       }
 
       await syncProfileAndAccess(adminClient, data.user, {
-        name: String(data.user.user_metadata?.name || target.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário'),
+        name: getUserDisplayName(data.user, targetProfile),
         role,
         shopId,
         isActive: targetProfile?.is_active !== false && isUserActive(data.user)
@@ -591,7 +601,7 @@ denoRuntime.serve(async (request: Request) => {
       const updatedProfile = await getRequesterProfile(adminClient, userId);
       const updatedRole = String(updatedProfile?.role || data.user.app_metadata?.role || 'recepcao');
       await syncProfileAndAccess(adminClient, data.user, {
-        name: String(updatedProfile?.full_name || data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário'),
+        name: getUserDisplayName(data.user, updatedProfile),
         role: updatedRole,
         shopId: updatedRole === 'admin'
             ? 'all'

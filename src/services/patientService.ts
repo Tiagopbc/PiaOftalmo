@@ -24,6 +24,20 @@ export const mapPatientToSnake = (pat: Partial<Patient>): any => {
   return copy;
 };
 
+const getTimelineEventDate = (event: any) =>
+  event?.date || event?.created_at || event?.createdAt || null;
+
+export const mapTimelineEventToCamel = (event: any): any => {
+  if (!event) return event;
+
+  return {
+    ...event,
+    patientId: event.patient_id ?? event.patientId,
+    createdAt: event.created_at ?? event.createdAt,
+    date: getTimelineEventDate(event)
+  };
+};
+
 export const patientService = {
   async getAll(): Promise<Patient[]> {
     if (!isSupabaseConfigured) return [];
@@ -70,9 +84,21 @@ export const patientService = {
       .from('patient_timeline_events')
       .select('*')
       .eq('patient_id', patientId)
-      .order('date', { ascending: false });
+      .order('date', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return (data || [])
+      .map(mapTimelineEventToCamel)
+      .sort((firstEvent, secondEvent) => {
+        const firstDate = Date.parse(getTimelineEventDate(firstEvent) || '');
+        const secondDate = Date.parse(getTimelineEventDate(secondEvent) || '');
+
+        if (Number.isNaN(firstDate) && Number.isNaN(secondDate)) return 0;
+        if (Number.isNaN(firstDate)) return 1;
+        if (Number.isNaN(secondDate)) return -1;
+
+        return secondDate - firstDate;
+      });
   },
   async addTimelineEvent(event: any): Promise<void> {
     if (!isSupabaseConfigured) return;

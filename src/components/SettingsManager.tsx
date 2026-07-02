@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 import { User, Users, Save, Lock, Eye, EyeOff, Store } from 'lucide-react';
@@ -27,16 +27,27 @@ const SettingsManager = () => {
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
 
+  useEffect(() => {
+    setProfileName(currentUser?.name || '');
+  }, [currentUser?.name]);
+
   const handleUpdateProfile = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!profileName.trim()) return;
+    const trimmedName = profileName.trim();
+    if (!trimmedName || !currentUser?.id) return;
 
     setUpdatingProfile(true);
 
     if (isSupabaseConfigured) {
       try {
+        const { error: profileError } = await supabase.rpc('update_own_profile_name', {
+          new_full_name: trimmedName
+        });
+
+        if (profileError) throw profileError;
+
         const { error } = await supabase.auth.updateUser({
-          data: { name: profileName }
+          data: { name: trimmedName }
         });
 
         if (error) throw error;
@@ -44,8 +55,9 @@ const SettingsManager = () => {
         // Atualizar estado local do usuário no contexto
         setCurrentUser((prev) => prev ? ({
           ...prev,
-          name: profileName
+          name: trimmedName
         }) : prev);
+        setProfileName(trimmedName);
 
         alert('Nome de perfil atualizado com sucesso!');
       } catch (err) {
@@ -182,8 +194,9 @@ const SettingsManager = () => {
                 </div>
 
                 <div className="form-group">
-                  <label style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nome Completo / Exibição*</label>
+                  <label htmlFor="account-profile-name" style={{ fontWeight: '600', marginBottom: '4px', display: 'block' }}>Nome Completo / Exibição*</label>
                   <input
+                    id="account-profile-name"
                     type="text"
                     className="form-control"
                     value={profileName}

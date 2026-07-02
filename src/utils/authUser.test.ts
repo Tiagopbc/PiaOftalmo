@@ -66,6 +66,24 @@ describe('getAuthUserProfile', () => {
     expect(mocks.from).not.toHaveBeenCalledWith('user_shop_access');
   });
 
+  it('usa profiles.full_name como nome exibido quando disponível', async () => {
+    mocks.state.profile = { role: 'medico', full_name: 'Médico Teste' };
+    mocks.state.access = {
+      shop_id: 'shop-uuid-1',
+      shops: { legacy_code: 'loja-1', name: 'Filial 1 - Centro' }
+    };
+
+    const profile = await getAuthUserProfile({
+      id: 'user-medico',
+      email: 'medico@clinica.com',
+      app_metadata: {},
+      user_metadata: { name: 'Nome Antigo' }
+    });
+
+    expect(profile.name).toBe('Médico Teste');
+    expect(profile.role).toBe('medico');
+  });
+
   it('não concede acesso administrativo a partir de user_metadata ou app_metadata', async () => {
     mocks.state.profile = { role: 'recepcao' };
     mocks.state.access = {

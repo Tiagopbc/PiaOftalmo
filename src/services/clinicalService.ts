@@ -30,6 +30,7 @@ export const clinicalService = {
         type: 'clinical',
         title: 'Prontuário Registrado',
         description: 'Um novo atendimento clínico estruturado foi adicionado.',
+        date: new Date().toISOString(),
         shop_id: data.shop_id
       }]);
     }
@@ -77,6 +78,7 @@ export const clinicalService = {
         type: 'clinical',
         title: `Exame: ${data.exam_type}`,
         description: 'Um novo exame foi anexado ao prontuário do paciente.',
+        date: new Date().toISOString(),
         shop_id: data.shop_id
       }]);
     }

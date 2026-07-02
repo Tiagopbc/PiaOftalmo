@@ -20,7 +20,7 @@ const getJoinedShop = (access?: UserShopAccess | null): JoinedShop | null => {
 };
 
 export const getAuthUserProfile = async (user: any): Promise<UserProfile> => {
-  const name = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário';
+  let name = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Usuário';
   let role = 'recepcao';
   let shopId = '';
   let shopName = '';
@@ -30,12 +30,16 @@ export const getAuthUserProfile = async (user: any): Promise<UserProfile> => {
     // Busca a role real no perfil
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('full_name, role')
       .eq('id', user.id)
       .single();
 
     if (profile) {
       role = profile.role;
+      const profileName = typeof profile.full_name === 'string' ? profile.full_name.trim() : '';
+      if (profileName) {
+        name = profileName;
+      }
     }
 
     // Busca a filial
